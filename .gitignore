@@ -3,3 +3,5 @@ share
 cmake-build-debug
 cmake-build-release
 testdata
+MyThermalSolution
+scripts/__pycache__

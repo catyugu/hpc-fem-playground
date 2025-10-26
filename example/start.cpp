@@ -10,11 +10,15 @@ int main(int argc, char *argv[])
     int myid = 0;
 
     // 2. Define the mesh and problem parameters
-    const char *mesh_file = "mymesh.vtk";
+    const char *mesh_file = "testdata/testmesh1.msh";
+    // Parse CmdLine arg (filename) is the user passes it
+    if (argc > 1) {
+        mesh_file = argv[1];
+    }
     int order = 1; // P1 (linear) finite elements
 
     // 3. Read the mesh from the Gmsh file
-    Mesh mesh(mesh_file, 1, 1);
+    Mesh mesh(mesh_file);
     int dim = mesh.Dimension();
     std ::cout << "Mesh dimension: " << dim << "\n";
     if (myid == 0) {
@@ -28,7 +32,7 @@ int main(int argc, char *argv[])
     // 5. Define the Bilinear Form 'a(u,v)' (the left-hand side)
     // This is the integral of (k * grad(u) * grad(v))
     BilinearForm a(&fes);
-    ConstantCoefficient k(1.0); // Thermal conductivity k=1
+    ConstantCoefficient k(401.0); // Thermal conductivity k=1
     a.AddDomainIntegrator(new DiffusionIntegrator(k));
     a.Assemble();
 
@@ -50,7 +54,7 @@ int main(int argc, char *argv[])
         x_minus_c -= center;
         double r = x_minus_c.Norml2();
         double r2 = r * r;
-        double A = 10.0; // Source amplitude
+        double A = 1e8; // Source amplitude
         double b = 50.0; // Source "width"
         return A * exp(-b * r2);
     };
@@ -78,9 +82,13 @@ int main(int argc, char *argv[])
     fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
     // Apply the T=1.0 and T=0.0 values
-    ConstantCoefficient hot_temp(1.0);
+    ConstantCoefficient hot_temp(100.0);
     ConstantCoefficient cold_temp(0.0);
     
+    for (auto &i : mesh.bdr_attributes) {
+        std::cout << "Boundary attribute: " << i << "\n";
+    }
+
     Array<int> hot_bdr(mesh.bdr_attributes.Max());
     hot_bdr = 0; hot_bdr[1-1] = 1; // Set only Attr 1
     x.ProjectBdrCoefficient(hot_temp, hot_bdr);
@@ -119,15 +127,12 @@ int main(int argc, char *argv[])
     ParaViewDataCollection paraview_dc("MyThermalSolution", &mesh);
     paraview_dc.SetLevelsOfDetail(order); // Save high-order data
     paraview_dc.RegisterField("Temperature", &x);
+    paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
 
     // 13. Finalize
     if (myid == 0) {
         std::cout << "Done. Open 'MyThermalSolution/MyThermalSolution.pvd' in ParaView.\n";
     }
-#ifdef MFEM_USE_MPI
-    Mpi::Finalize();
-#endif
-
     return 0;
 }
