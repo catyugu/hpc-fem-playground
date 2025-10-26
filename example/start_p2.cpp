@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     int myid = 0;
 
     // 1. Define the mesh and problem parameters
-    const char *mesh_file = "testdata/testmesh2.msh";
+    const char *mesh_file = "testdata/testmesh1_p2.mesh";
     // 2. Parse CmdLine arg (filename) is the user passes it
     if (argc > 1) {
         mesh_file = argv[1];
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
         std::cout << "Saving solution to ParaView files...\n";
     }
     ParaViewDataCollection paraview_dc("MyThermalSolution", &mesh);
-    paraview_dc.SetLevelsOfDetail(order); // Save high-order data
+    paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("Temperature", &x);
     paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
