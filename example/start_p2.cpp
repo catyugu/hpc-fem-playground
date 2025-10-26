@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
     if (argc > 1) {
         mesh_file = argv[1];
     }
-    int order = 1; // P1 (linear) finite elements
+    int order = 2; // P2 (quadratic) finite elements
 
     // 3. Read the mesh from the Gmsh file
     Mesh mesh(mesh_file);
