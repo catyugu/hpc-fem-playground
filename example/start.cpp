@@ -36,70 +36,42 @@ int main(int argc, char *argv[])
     a.AddDomainIntegrator(new DiffusionIntegrator(k));
     a.Assemble();
 
-    // 6. Define the Linear Form 'b(v)' (the right-hand side)
-    // This includes the heat source f
-    LinearForm b(&fes);
-
-    // Define a Gaussian heat source at the center
-    Vector center(dim);
-    Vector min_bb(dim), max_bb(dim);
-    mesh.GetBoundingBox(min_bb, max_bb);
-    for (int i = 0; i < dim; i++) {
-        center(i) = (min_bb(i) + max_bb(i)) * 0.5;
-    }
-    
-    // A C++ lambda function for the heat source f(x) returning a double
-    auto gaussian_source = [&](const Vector &x) -> double {
-        Vector x_minus_c(x);
-        x_minus_c -= center;
-        double r = x_minus_c.Norml2();
-        double r2 = r * r;
-        double A = 1e8; // Source amplitude
-        double b = 50.0; // Source "width"
-        return A * exp(-b * r2);
-    };
-    FunctionCoefficient f_coeff(gaussian_source);
-    
-    b.AddDomainIntegrator(new DomainLFIntegrator(f_coeff));
-    b.Assemble();
-
     // 7. Define the solution GridFunction 'x' (Temperature)
     GridFunction x(&fes);
     x = 0.0; // Initialize temperature to 0
 
     // 8. Set up the Dirichlet Boundary Conditions
-    // We assume:
-    // - Boundary Attribute 1 = "hot" side (T=1.0)
-    // - Boundary Attribute 2 = "cold" side (T=0.0)
-
-    // Get a list of all essential (Dirichlet) degrees of freedom
     Array<int> ess_bdr(mesh.bdr_attributes.Max());
+
     ess_bdr = 0;
-    ess_bdr[1-1] = 1; // Attribute 1
-    ess_bdr[2-1] = 1; // Attribute 2
+    ess_bdr[3-1] = 1; // Attribute 3
+    ess_bdr[13-1] = 1; // Attribute 13
 
     Array<int> ess_tdof_list;
     fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
-    // Apply the T=1.0 and T=0.0 values
-    ConstantCoefficient hot_temp(100.0);
-    ConstantCoefficient cold_temp(0.0);
+    ConstantCoefficient cold_temp(293.15);
+    ConstantCoefficient hot_temp(1220.0);
+    
     
     for (auto &i : mesh.bdr_attributes) {
         std::cout << "Boundary attribute: " << i << "\n";
     }
 
-    Array<int> hot_bdr(mesh.bdr_attributes.Max());
-    hot_bdr = 0; hot_bdr[1-1] = 1; // Set only Attr 1
-    x.ProjectBdrCoefficient(hot_temp, hot_bdr);
-
     Array<int> cold_bdr(mesh.bdr_attributes.Max());
-    cold_bdr = 0; cold_bdr[2-1] = 1; // Set only Attr 2
+    cold_bdr = 0; cold_bdr[3-1] = 1; // Set only Attr 3
     x.ProjectBdrCoefficient(cold_temp, cold_bdr);
+
+    Array<int> hot_bdr(mesh.bdr_attributes.Max());
+    hot_bdr = 0; hot_bdr[13-1] = 1; // Set only Attr 13
+    x.ProjectBdrCoefficient(hot_temp, hot_bdr);
 
     // 9. Form the final linear system A*X = B
     SparseMatrix A;
     Vector B, X;
+    // No load, so b is zero
+    Vector b(fes.GetTrueVSize());
+    b = 0.0;
     a.FormLinearSystem(ess_tdof_list, x, b, A, X, B);
 
     // 10. Solve the linear system A*X = B
