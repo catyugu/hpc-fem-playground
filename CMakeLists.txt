@@ -1,23 +1,27 @@
 cmake_minimum_required(VERSION 3.16)
 project(HPC_FEM_PLAYGROUND CXX)
 
-# Options to vendor third-party dependencies into `share`
-option(VENDOR_THIRD_PARTY "Clone third-party deps into share" ON)
-set(THIRD_PARTY_DIR ${PROJECT_SOURCE_DIR}/share CACHE PATH "Path to store third-party sources")
 
-# MFEM feature toggles (can be overridden by environment or CI)
-option(ENABLE_MFEM_MPI "Enable MPI support for MFEM" ON)
-option(ENABLE_MFEM_HYPRE "Enable HYPRE support for MFEM" ON)
-option(ENABLE_MFEM_SUITESPARSE "Enable SuiteSparse/UMFPACK for MFEM" ON)
+if(NOT DEFINED THIRD_PARTY_DIR)
+    set(THIRD_PARTY_DIR ${PROJECT_SOURCE_DIR}/share CACHE PATH "Path to store third-party sources")
+endif()
 
-set(MFEM_USE_MPI ${ENABLE_MFEM_MPI})
-set(MFEM_USE_HYPRE ${ENABLE_MFEM_HYPRE})
-set(MFEM_USE_SUITESPARSE ${ENABLE_MFEM_SUITESPARSE})
+# MFEM source (vendor or clone)
+set(MFEM_INCLUDE_DIR ${THIRD_PARTY_DIR}/mfem)
+if(NOT EXISTS ${MFEM_INCLUDE_DIR})
+    message(STATUS "MFEM not found locally, downloading from remote...")
+    execute_process(
+        COMMAND git clone --depth 1 --branch v4.8 https://github.com/mfem/mfem.git ${MFEM_INCLUDE_DIR}
+        RESULT_VARIABLE GIT_CLONE_RESULT
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT GIT_CLONE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to clone MFEM repository")
+    endif()
+    message(STATUS "MFEM download completed")
+endif()
 
-# If requested, vendor (git-clone) third-party sources into share/third_party
-include(configurations/ConfigureMFEM.cmake)
-
-add_subdirectory(${MFEM_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/mfem_build)
+add_subdirectory(${MFEM_INCLUDE_DIR})
 
 
 set(HPC_FEM_PLAYGROUND_INCLUDE_DIR

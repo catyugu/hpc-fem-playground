@@ -44,7 +44,6 @@ public:
 
 int main(int argc, char *argv[])
 {
-    int myid = 0;
 
     const char *mesh_file = "testdata/testmesh_bar.mesh";
     const char *output_dir = "results/ex2_rect_waveguide";
@@ -79,10 +78,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (myid == 0)
-    {
-        std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << std::endl;
-    }
+    std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << std::endl;
 
     // Debug: report boundary attribute counts
     int nbdr = mesh.GetNBE();
@@ -109,10 +105,8 @@ int main(int argc, char *argv[])
     // ND (Nedelec) finite element space for H(curl)
     ND_FECollection fec(order, dim);
     FiniteElementSpace fes(&mesh, &fec);
-    if (myid == 0)
-    {
-        std::cout << "Number of H(curl) dofs: " << fes.GetTrueVSize() << std::endl;
-    }
+
+    std::cout << "Number of H(curl) dofs: " << fes.GetTrueVSize() << std::endl;
 
     // Bilinear form: curl-curl - k0^2 * eps * I
     BilinearForm aform(&fes);
@@ -187,76 +181,31 @@ int main(int argc, char *argv[])
     std::cout << "Assembled matrix size: " << A.Height() << " x " << A.Width() << std::endl;
     std::cout << "RHS (reduced) norm L2: " << B.Norml2() << ", Linf: " << B.Normlinf() << std::endl;
 
-    // Try a direct solver if available at compile time; otherwise fall back to GMRES
-    bool solved = false;
-#if defined(MFEM_USE_SUITESPARSE)
-    if (myid == 0)
-    {
-        std::cout << "Solving linear system with UMFPACK (direct) ..." << std::endl;
-    }
-    UMFPackSolver umf;
-    umf.SetOperator(A);
-    umf.Mult(B, X);
-    solved = true;
-#elif defined(MFEM_USE_MUMPS)
-    if (myid == 0)
-    {
-        std::cout << "Solving linear system with MUMPS (direct) ..." << std::endl;
-    }
-    // MUMPSSolver requires MPI; construct with MPI_COMM_WORLD
-#ifdef MFEM_USE_MPI
-    MUMPSSolver mumps(MPI_COMM_WORLD);
-    mumps.SetOperator(A);
-    mumps.Mult(B, X);
-    solved = true;
-#endif
-#elif defined(MFEM_USE_SUPERLU)
-    if (myid == 0)
-    {
-        std::cout << "Solving linear system with SuperLU_DIST (direct) ..." << std::endl;
-    }
-#ifdef MFEM_USE_MPI
-    SuperLUSolver slu(MPI_COMM_WORLD);
-    slu.SetOperator(A);
-    slu.Mult(B, X);
-    solved = true;
-#endif
-#endif
-
-    if (!solved)
-    {
-        if (myid == 0)
-        {
-            std::cout << "Solving linear system (GMRES)..." << std::endl;
-        }
-        GSSmoother M(A);
-        GMRESSolver solver;
-        solver.SetOperator(A);
-        solver.SetRelTol(1e-8);
-        solver.SetAbsTol(1e-6);
-        solver.SetMaxIter(500);
-        solver.SetPrintLevel(1);
-        solver.SetPreconditioner(M);
-        solver.Mult(B, X);
-    }
+    std::cout << "Solving linear system (GMRES)..." << std::endl;
+    GSSmoother M(A);
+    GMRESSolver solver;
+    solver.SetOperator(A);
+    solver.SetRelTol(1e-8);
+    solver.SetAbsTol(1e-6);
+    solver.SetMaxIter(500);
+    solver.SetPrintLevel(1);
+    solver.SetPreconditioner(M);
+    solver.Mult(B, X);
 
     // Recover solution
     aform.RecoverFEMSolution(X, rhs, x);
 
     // Save to ParaView
-    if (myid == 0)
-    {
-        std::cout << "Saving solution to ParaView files..." << std::endl;
-    }
+
+    std::cout << "Saving solution to ParaView files..." << std::endl;
+
     ParaViewDataCollection paraview_dc(output_dir, &mesh);
     paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("E_field", &x);
     paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
 
-    if (myid == 0)
-    {
-        std::cout << "Done. Output in '" << output_dir << "'." << std::endl;
-    }
+    std::cout << "Done. Output in '" << output_dir << "'." << std::endl;
+
     return 0;
 }

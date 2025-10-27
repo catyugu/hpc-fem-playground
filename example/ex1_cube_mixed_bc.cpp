@@ -34,7 +34,6 @@ using namespace mfem;
 
 int main(int argc, char *argv[])
 {
-    int myid = 0;
 
     // --- (I) Inputs and user options -------------------------------------------------
     const char *mesh_file = "testdata/testmesh_cube.mesh";
@@ -53,10 +52,8 @@ int main(int argc, char *argv[])
     Mesh mesh(mesh_file);
     int dim = mesh.Dimension();
     std::cout << "Mesh dimension: " << dim << "\n";
-    if (myid == 0)
-    {
-        std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << "\n";
-    }
+
+    std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << "\n";
 
     H1_FECollection fec(order, dim);
     FiniteElementSpace fes(&mesh, &fec);
@@ -125,10 +122,7 @@ int main(int argc, char *argv[])
     Vector B, X;
     a.FormLinearSystem(ess_tdof_list, x, lf, A, X, B);
 
-    if (myid == 0)
-    {
-        std::cout << "Solving linear system...\n";
-    }
+    std::cout << "Solving linear system...\n";
     GSSmoother M(A);
     CGSolver solver;
     solver.SetOperator(A);
@@ -142,19 +136,15 @@ int main(int argc, char *argv[])
     a.RecoverFEMSolution(X, lf, x);
 
     // --- (VIII) Save ---------------------------------------------------------------
-    if (myid == 0)
-    {
-        std::cout << "Saving solution to ParaView files...\n";
-    }
+
+    std::cout << "Saving solution to ParaView files...\n";
+
     ParaViewDataCollection paraview_dc(output_dir, &mesh);
     paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("Temperature", &x);
     paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
 
-    if (myid == 0)
-    {
-        std::cout << "Done. Open '" << output_dir << "/" << output_dir << ".pvd' in ParaView.\n";
-    }
+    std::cout << "Done. Open '" << output_dir << "/" << output_dir << ".pvd' in ParaView.\n";
     return 0;
 }
