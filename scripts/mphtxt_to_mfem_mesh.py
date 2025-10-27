@@ -177,8 +177,8 @@ def mfem_geom_from_name(name, nverts, sdim=None):
 		return 1
 	if name.startswith('tri') or name.startswith('triangle') or n == 3:
 		return 2
-	if name.startswith('quad') or name.startswith('square') or n == 4:
-		# caution: 4 can also mean tetra in 3D; prefer quad for surface faces
+	if name.startswith('quad') or name.startswith('square'):
+		# quad/square surface faces
 		return 3
 	if name.startswith('tet') or name.startswith('tetra'):
 		return 4
