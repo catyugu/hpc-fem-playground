@@ -10,10 +10,14 @@ int main(int argc, char *argv[])
     int myid = 0;
 
     // 1. Define the mesh and problem parameters
-    const char *mesh_file = "testdata/testmesh1.mesh";
+    const char *mesh_file = "testdata/testmesh_cylinder.mesh";
+    const char *output_dir = "results/ex0_cylinder_dirichlet";
     // 2. Parse CmdLine arg (filename) is the user passes it
     if (argc > 1) {
         mesh_file = argv[1];
+    }
+    if (argc > 2) {
+        output_dir = argv[2];
     }
     int order = 1; // P1 (linear) finite elements
 
@@ -96,7 +100,7 @@ int main(int argc, char *argv[])
     if (myid == 0) {
         std::cout << "Saving solution to ParaView files...\n";
     }
-    ParaViewDataCollection paraview_dc("MyThermalSolution", &mesh);
+    ParaViewDataCollection paraview_dc(output_dir, &mesh);
     paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("Temperature", &x);
     paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
@@ -104,7 +108,7 @@ int main(int argc, char *argv[])
 
     // 13. Finalize
     if (myid == 0) {
-        std::cout << "Done. Open 'MyThermalSolution/MyThermalSolution.pvd' in ParaView.\n";
+        std::cout << "Done. Open '" << output_dir << "/" << output_dir << ".pvd' in ParaView.\n";
     }
     return 0;
 }
