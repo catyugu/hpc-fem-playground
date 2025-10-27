@@ -16,10 +16,10 @@
 //  2) Build BilinearForm `a` with DiffusionIntegrator(k).
 //     - Add MassIntegrator(h) on the Robin boundary to include h*u*v term.
 //  3) Build LinearForm `lf` for RHS contributions:
-//     - Robin contribution: 
+//     - Robin contribution:
 //           \int_{Gamma_robin} h * T_inf * v
 //       implemented with `BoundaryLFIntegrator(h*T_inf)` on the Robin markers.
-//     - Neumann contribution: 
+//     - Neumann contribution:
 //           \int_{Gamma_neu} q * v
 //       implemented with `BoundaryLFIntegrator(q)` on the Neumann markers.
 //  4) Apply Dirichlet BCs by setting essential boundary attributes and
@@ -39,15 +39,24 @@ int main(int argc, char *argv[])
     // --- (I) Inputs and user options -------------------------------------------------
     const char *mesh_file = "testdata/testmesh_cube.mesh";
     const char *output_dir = "results/ex1_cube_mixed_bc";
-    if (argc > 1) { mesh_file = argv[1]; }
-    if (argc > 2) { output_dir = argv[2]; }
+    if (argc > 1)
+    {
+        mesh_file = argv[1];
+    }
+    if (argc > 2)
+    {
+        output_dir = argv[2];
+    }
     int order = 1; // finite element order (P1 = linear)
 
     // --- (II) Mesh and FE space -----------------------------------------------------
     Mesh mesh(mesh_file);
     int dim = mesh.Dimension();
     std::cout << "Mesh dimension: " << dim << "\n";
-    if (myid == 0) { std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << "\n"; }
+    if (myid == 0)
+    {
+        std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << "\n";
+    }
 
     H1_FECollection fec(order, dim);
     FiniteElementSpace fes(&mesh, &fec);
@@ -64,7 +73,7 @@ int main(int argc, char *argv[])
     // --- (V) Essential (Dirichlet) BCs ---------------------------------------------
     Array<int> ess_bdr(mesh.bdr_attributes.Max());
     ess_bdr = 0;
-    ess_bdr[1-1] = 1; // Attribute 1 is essential (cold Dirichlet)
+    ess_bdr[1 - 1] = 1; // Attribute 1 is essential (cold Dirichlet)
     // Note: attribute 6 is NOT made essential here: it is handled as Robin (natural part)
     Array<int> ess_tdof_list;
     fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
@@ -73,14 +82,19 @@ int main(int argc, char *argv[])
     ConstantCoefficient hot_temp(393.15); // ambient/hot world temperature used for projection/info
 
     // Print available boundary attributes for clarity
-    for (auto &i : mesh.bdr_attributes) { std::cout << "Boundary attribute: " << i << "\n"; }
+    for (auto &i : mesh.bdr_attributes)
+    {
+        std::cout << "Boundary attribute: " << i << "\n";
+    }
 
     Array<int> cold_bdr(mesh.bdr_attributes.Max());
-    cold_bdr = 0; cold_bdr[1-1] = 1; // attribute 1 only
+    cold_bdr = 0;
+    cold_bdr[1 - 1] = 1; // attribute 1 only
     x.ProjectBdrCoefficient(cold_temp, cold_bdr);
 
     Array<int> hot_bdr(mesh.bdr_attributes.Max());
-    hot_bdr = 0; hot_bdr[6-1] = 1; // attribute 6 (Robin)
+    hot_bdr = 0;
+    hot_bdr[6 - 1] = 1; // attribute 6 (Robin)
 
     // Robin BC setup: add h * u * v to the bilinear form on the robin marker
     double h_coeff_val = 100.0; // heat transfer coefficient (W/m^2/K)
@@ -96,7 +110,8 @@ int main(int argc, char *argv[])
     // Neumann BC on attribute 2: prescribed inward heat flux q (W/m^2)
     // Adds: \int_{Gamma_neu} q * v  (positive q -> heat entering the domain)
     Array<int> neumann_bdr(mesh.bdr_attributes.Max());
-    neumann_bdr = 0; neumann_bdr[2-1] = 1; // attribute 2
+    neumann_bdr = 0;
+    neumann_bdr[2 - 1] = 1;       // attribute 2
     double inward_flux_val = 5e4; // W/m^2
     ConstantCoefficient neumann_flux(inward_flux_val);
     lf.AddBoundaryIntegrator(new BoundaryLFIntegrator(neumann_flux), neumann_bdr);
@@ -106,10 +121,14 @@ int main(int argc, char *argv[])
     lf.Assemble();
 
     // --- (VII) Form linear system and solve ----------------------------------------
-    SparseMatrix A; Vector B, X;
+    SparseMatrix A;
+    Vector B, X;
     a.FormLinearSystem(ess_tdof_list, x, lf, A, X, B);
 
-    if (myid == 0) { std::cout << "Solving linear system...\n"; }
+    if (myid == 0)
+    {
+        std::cout << "Solving linear system...\n";
+    }
     GSSmoother M(A);
     CGSolver solver;
     solver.SetOperator(A);
@@ -123,13 +142,19 @@ int main(int argc, char *argv[])
     a.RecoverFEMSolution(X, lf, x);
 
     // --- (VIII) Save ---------------------------------------------------------------
-    if (myid == 0) { std::cout << "Saving solution to ParaView files...\n"; }
+    if (myid == 0)
+    {
+        std::cout << "Saving solution to ParaView files...\n";
+    }
     ParaViewDataCollection paraview_dc(output_dir, &mesh);
     paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("Temperature", &x);
     paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
 
-    if (myid == 0) { std::cout << "Done. Open '" << output_dir << "/" << output_dir << ".pvd' in ParaView.\n"; }
+    if (myid == 0)
+    {
+        std::cout << "Done. Open '" << output_dir << "/" << output_dir << ".pvd' in ParaView.\n";
+    }
     return 0;
 }
