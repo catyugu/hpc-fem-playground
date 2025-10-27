@@ -18,6 +18,8 @@ set(MFEM_USE_SUITESPARSE ${ENABLE_MFEM_SUITESPARSE})
 include(configurations/ConfigureMFEM.cmake)
 
 add_subdirectory(${MFEM_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/mfem_build)
+
+
 set(HPC_FEM_PLAYGROUND_INCLUDE_DIR
     ${MFEM_INCLUDE_DIR}
 )
@@ -29,9 +31,8 @@ add_subdirectory(src)
 add_library(HPC_FEM_PLAYGROUND_LIB INTERFACE)
 target_include_directories(HPC_FEM_PLAYGROUND_LIB INTERFACE 
     ${HPC_FEM_PLAYGROUND_INCLUDE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
 )
-target_link_libraries(HPC_FEM_PLAYGROUND_LIB INTERFACE mfem mfem_plugins)
+target_link_libraries(HPC_FEM_PLAYGROUND_LIB INTERFACE mfem)
 
 add_subdirectory(example)
 add_subdirectory(benchmark)
