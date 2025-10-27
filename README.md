@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This project is a playground on the basis of the famous open-source FEM lib MFEM (`https://github.com/mfem/mfem.git`), and serve the following founctionalities:
+This project is a playground on the basis of the famous open-source FEM lib [MFEM](https://github.com/mfem/mfem.git), and serve the following founctionalities:
 
 - Convert COMSOL mesh (.mphtxt, ./mphbin(TODO)) to standard gmsh file (.msh) or MFEM custon mesh format (.mesh)
 - Make abstracts, adapters, decorators and plugins for MFEM, so we may plugin our custom algorithm or data schema for each steps (Assembly, BC Application, Linear solving...(Although I don't think it is easy to even get closed to the performance of the modern and highly optimized Linear Solvers)).
