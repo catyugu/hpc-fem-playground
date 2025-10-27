@@ -15,10 +15,9 @@ set(MFEM_USE_HYPRE ${ENABLE_MFEM_HYPRE})
 set(MFEM_USE_SUITESPARSE ${ENABLE_MFEM_SUITESPARSE})
 
 # If requested, vendor (git-clone) third-party sources into share/third_party
-include(cmake/ConfigureMFEM.cmake)
+include(configurations/ConfigureMFEM.cmake)
 
 add_subdirectory(${MFEM_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/mfem_build)
-target_compile_options(mfem PRIVATE -w)
 set(HPC_FEM_PLAYGROUND_INCLUDE_DIR
     ${MFEM_INCLUDE_DIR}
 )
