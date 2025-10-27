@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 
     // Mesh parameters
     int nx = 20, ny = 10, nz = 10;
-    int order = 2;
+    int order = 1;
 
     // Physical parameters
     const double sigma_0 = 5.96e7;     // Copper conductivity at 20°C [S/m]
@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
     const double k_thermal = 400.0; // Thermal conductivity [W/m/K]
     const double rho = 8960.0;      // Density [kg/m³]
     const double cp = 385.0;        // Specific heat [J/kg/K]
-    const double h_conv = 10.0;     // Convection coefficient [W/m²/K]
+    const double h_conv = 100.0;     // Convection coefficient [W/m²/K]
     const double T_amb = 293.15;    // Ambient temperature [K]
 
     // Applied voltage
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
 
     // Create rectangular bar mesh (conductor)
     Mesh mesh = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
-                                      1.0, 0.1, 0.1, true);
+                                      1.0, 1.0, 1.0, true);
     int dim = mesh.Dimension();
 
     std::cout << "Mesh: " << nx << "x" << ny << "x" << nz << " = "
