@@ -206,4 +206,4 @@ To add new functionality:
 - Plugin system version: 1.0.0
 - MFEM version: 4.8.0
 - CMake minimum: 3.16
-- C++ standard: C++11 (compatible with C++14/17/20)
+- C++ standard: C++17 (compatible with C++17/20)
