@@ -13,11 +13,13 @@ This repository provides a comprehensive learning and development framework for 
 Comprehensive startup guides covering:
 
 ### 1. Static Problems (`basic_usage_scalar_static.md`)
+
 - Steady-state scalar diffusion/heat problems
 - Pure Dirichlet and mixed boundary conditions
 - Step-by-step implementation patterns
 
 ### 2. Transient Problems (`transient_time_dependent.md`)
+
 - Time-dependent parabolic (heat/diffusion) and hyperbolic (wave) equations
 - ODE time integration framework (explicit and implicit methods)
 - Mass and stiffness matrix assembly
@@ -25,6 +27,7 @@ Comprehensive startup guides covering:
 - Stability analysis and time step selection
 
 ### 3. Frequency-Domain Problems (`frequency_domain_problems.md`)
+
 - Time-harmonic (frequency-domain) PDEs
 - Helmholtz equation for acoustics
 - Vector Helmholtz / Maxwell equations for electromagnetics
@@ -32,6 +35,7 @@ Comprehensive startup guides covering:
 - Port excitation and modal analysis
 
 ### 4. Eigenvalue Problems (`eigenvalue_problems.md`)
+
 - Generalized eigenvalue problems (K u = λ M u)
 - Laplacian eigenvalues (vibration modes, quantum states)
 - Maxwell eigenvalues (cavity modes)
@@ -39,6 +43,7 @@ Comprehensive startup guides covering:
 - Validation against analytical solutions
 
 ### 5. Boundary Conditions (`boundary_conditions_guide.md`)
+
 - Essential (Dirichlet) BCs for scalar and vector fields
 - Natural (Neumann) BCs
 - Robin (mixed) BCs
@@ -49,30 +54,35 @@ Comprehensive startup guides covering:
 ## Examples (`example/`)
 
 ### ex0_cylinder_dirichlet.cpp
+
 - **Problem**: Steady-state heat conduction in cylinder
 - **Type**: Static, pure Dirichlet BC
 - **Features**: Multiple temperature boundaries
 
 ### ex1_cube_mixed_bc.cpp
+
 - **Problem**: Steady-state heat with mixed BCs
 - **Type**: Static, Dirichlet + Robin + Neumann
 - **Features**: Convective heat transfer, prescribed flux
 
 ### ex2_rect_waveguide.cpp
+
 - **Problem**: Rectangular waveguide electromagnetics
 - **Type**: Frequency-domain, H(curl) space
 - **Features**: TE10 modal excitation, PEC walls
 
 ### ex3_transient_heat.cpp ✓ NEW
+
 - **Problem**: Time-dependent heat diffusion
 - **Type**: Transient, parabolic PDE
-- **Features**: 
+- **Features**:
   - Backward Euler, Forward Euler, and RK4 time integrators
   - Gaussian initial condition
   - Dirichlet BC
   - ParaView time series output
 
 ### ex4_eigenvalue_laplacian.cpp ✓ NEW
+
 - **Problem**: Laplacian eigenvalue problem (-∇²u = λu)
 - **Type**: Eigenvalue problem
 - **Features**:
@@ -113,7 +123,7 @@ All meshes include properly marked boundary attributes for different BC types.
 
 Modular, extensible components for replacing MFEM pipeline stages:
 
-### Planned Components:
+### Planned Components
 
 1. **Assembly Plugins**
    - Element-by-element assembly
@@ -134,14 +144,14 @@ Modular, extensible components for replacing MFEM pipeline stages:
 
 ## Usage Workflow
 
-### For Learning MFEM:
+### For Learning MFEM
 
 1. Read the relevant guide in `docs/mfem-design-concept/`
 2. Examine the corresponding example in `example/`
 3. Modify and experiment with parameters
 4. Visualize results in ParaView
 
-### For Research/Development:
+### For Research/Development
 
 1. Start with existing examples as templates
 2. Implement custom algorithms using plugin interfaces (when available)
