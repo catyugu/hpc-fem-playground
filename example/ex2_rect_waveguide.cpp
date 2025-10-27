@@ -166,16 +166,46 @@ int main(int argc, char *argv[])
     std::cout << "Assembled matrix size: " << A.Height() << " x " << A.Width() << std::endl;
     std::cout << "RHS (reduced) norm L2: " << B.Norml2() << ", Linf: " << B.Normlinf() << std::endl;
 
-    if (myid == 0) { std::cout << "Solving linear system (GMRES)..." << std::endl; }
-    GSSmoother M(A);
-    GMRESSolver solver;
-    solver.SetOperator(A);
-    solver.SetRelTol(1e-6);
-    solver.SetAbsTol(1e-6);
-    solver.SetMaxIter(500);
-    solver.SetPrintLevel(1);
-    solver.SetPreconditioner(M);
-    solver.Mult(B, X);
+    // Try a direct solver if available at compile time; otherwise fall back to GMRES
+    bool solved = false;
+#if defined(MFEM_USE_SUITESPARSE)
+    if (myid == 0) { std::cout << "Solving linear system with UMFPACK (direct) ..." << std::endl; }
+    UMFPackSolver umf;
+    umf.SetOperator(A);
+    umf.Mult(B, X);
+    solved = true;
+#elif defined(MFEM_USE_MUMPS)
+    if (myid == 0) { std::cout << "Solving linear system with MUMPS (direct) ..." << std::endl; }
+    // MUMPSSolver requires MPI; construct with MPI_COMM_WORLD
+#ifdef MFEM_USE_MPI
+    MUMPSSolver mumps(MPI_COMM_WORLD);
+    mumps.SetOperator(A);
+    mumps.Mult(B, X);
+    solved = true;
+#endif
+#elif defined(MFEM_USE_SUPERLU)
+    if (myid == 0) { std::cout << "Solving linear system with SuperLU_DIST (direct) ..." << std::endl; }
+#ifdef MFEM_USE_MPI
+    SuperLUSolver slu(MPI_COMM_WORLD);
+    slu.SetOperator(A);
+    slu.Mult(B, X);
+    solved = true;
+#endif
+#endif
+
+    if (!solved)
+    {
+        if (myid == 0) { std::cout << "Solving linear system (GMRES)..." << std::endl; }
+        GSSmoother M(A);
+        GMRESSolver solver;
+        solver.SetOperator(A);
+        solver.SetRelTol(1e-8);
+        solver.SetAbsTol(1e-6);
+        solver.SetMaxIter(500);
+        solver.SetPrintLevel(1);
+        solver.SetPreconditioner(M);
+        solver.Mult(B, X);
+    }
 
     // Recover solution
     aform.RecoverFEMSolution(X, rhs, x);

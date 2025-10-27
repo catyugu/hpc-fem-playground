@@ -1,29 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
 project(HPC_FEM_PLAYGROUND CXX)
 
-set(MFEM_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/share/mfem)
-if(NOT EXISTS ${MFEM_INCLUDE_DIR})
-    message(STATUS "MFEM not found locally, downloading from remote...")
-    execute_process(
-        COMMAND git clone --depth 1 --branch v4.8 https://github.com/mfem/mfem.git ${MFEM_INCLUDE_DIR}
-        RESULT_VARIABLE GIT_CLONE_RESULT
-    )
-    if(NOT GIT_CLONE_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to clone MFEM repository")
-    endif()
-    message(STATUS "MFEM download completed")
-endif()
+# Options to vendor third-party dependencies into `share`
+option(VENDOR_THIRD_PARTY "Clone third-party deps into share" ON)
+set(THIRD_PARTY_DIR ${PROJECT_SOURCE_DIR}/share CACHE PATH "Path to store third-party sources")
 
-# If MFEM was cloned into share/mfem, build it as a subdirectory so the
-# "mfem" CMake target is available for linking. We build it in a separate
-# build subdirectory under the main build dir to avoid in-source MFEM builds.
-if (EXISTS ${MFEM_INCLUDE_DIR}/CMakeLists.txt)
-    message(STATUS "Adding MFEM subdirectory: ${MFEM_INCLUDE_DIR}")
-    add_subdirectory(${MFEM_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/mfem_build)
-else()
-    message(WARNING "MFEM CMakeLists.txt not found in ${MFEM_INCLUDE_DIR}; expecting system-installed libmfem")
-endif()
+# MFEM feature toggles (can be overridden by environment or CI)
+option(ENABLE_MFEM_MPI "Enable MPI support for MFEM" ON)
+option(ENABLE_MFEM_HYPRE "Enable HYPRE support for MFEM" ON)
+option(ENABLE_MFEM_SUITESPARSE "Enable SuiteSparse/UMFPACK for MFEM" ON)
 
+set(MFEM_USE_MPI ${ENABLE_MFEM_MPI})
+set(MFEM_USE_HYPRE ${ENABLE_MFEM_HYPRE})
+set(MFEM_USE_SUITESPARSE ${ENABLE_MFEM_SUITESPARSE})
+
+# If requested, vendor (git-clone) third-party sources into share/third_party
+include(cmake/ConfigureMFEM.cmake)
+
+add_subdirectory(${MFEM_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/mfem_build)
+target_compile_options(mfem PRIVATE -w)
 set(HPC_FEM_PLAYGROUND_INCLUDE_DIR
     ${MFEM_INCLUDE_DIR}
 )
