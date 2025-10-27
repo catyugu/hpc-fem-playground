@@ -9,12 +9,20 @@ int main(int argc, char *argv[])
 {
     int myid = 0;
 
-    // 2. Define the mesh and problem parameters
-    const char *mesh_file = "mymesh.vtk";
+    // 1. Define the mesh and problem parameters
+    const char *mesh_file = "testdata/testmesh_cylinder.mesh";
+    const char *output_dir = "results/ex0_cylinder_dirichlet";
+    // 2. Parse CmdLine arg (filename) is the user passes it
+    if (argc > 1) {
+        mesh_file = argv[1];
+    }
+    if (argc > 2) {
+        output_dir = argv[2];
+    }
     int order = 1; // P1 (linear) finite elements
 
     // 3. Read the mesh from the Gmsh file
-    Mesh mesh(mesh_file, 1, 1);
+    Mesh mesh(mesh_file);
     int dim = mesh.Dimension();
     std ::cout << "Mesh dimension: " << dim << "\n";
     if (myid == 0) {
@@ -28,70 +36,46 @@ int main(int argc, char *argv[])
     // 5. Define the Bilinear Form 'a(u,v)' (the left-hand side)
     // This is the integral of (k * grad(u) * grad(v))
     BilinearForm a(&fes);
-    ConstantCoefficient k(1.0); // Thermal conductivity k=1
+    ConstantCoefficient k(401.0); // Thermal conductivity k=1
     a.AddDomainIntegrator(new DiffusionIntegrator(k));
     a.Assemble();
-
-    // 6. Define the Linear Form 'b(v)' (the right-hand side)
-    // This includes the heat source f
-    LinearForm b(&fes);
-
-    // Define a Gaussian heat source at the center
-    Vector center(dim);
-    Vector min_bb(dim), max_bb(dim);
-    mesh.GetBoundingBox(min_bb, max_bb);
-    for (int i = 0; i < dim; i++) {
-        center(i) = (min_bb(i) + max_bb(i)) * 0.5;
-    }
-    
-    // A C++ lambda function for the heat source f(x) returning a double
-    auto gaussian_source = [&](const Vector &x) -> double {
-        Vector x_minus_c(x);
-        x_minus_c -= center;
-        double r = x_minus_c.Norml2();
-        double r2 = r * r;
-        double A = 10.0; // Source amplitude
-        double b = 50.0; // Source "width"
-        return A * exp(-b * r2);
-    };
-    FunctionCoefficient f_coeff(gaussian_source);
-    
-    b.AddDomainIntegrator(new DomainLFIntegrator(f_coeff));
-    b.Assemble();
 
     // 7. Define the solution GridFunction 'x' (Temperature)
     GridFunction x(&fes);
     x = 0.0; // Initialize temperature to 0
 
     // 8. Set up the Dirichlet Boundary Conditions
-    // We assume:
-    // - Boundary Attribute 1 = "hot" side (T=1.0)
-    // - Boundary Attribute 2 = "cold" side (T=0.0)
-
-    // Get a list of all essential (Dirichlet) degrees of freedom
     Array<int> ess_bdr(mesh.bdr_attributes.Max());
+
     ess_bdr = 0;
-    ess_bdr[1-1] = 1; // Attribute 1
-    ess_bdr[2-1] = 1; // Attribute 2
+    ess_bdr[3-1] = 1; // Attribute 3
+    ess_bdr[13-1] = 1; // Attribute 13
 
     Array<int> ess_tdof_list;
     fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
-    // Apply the T=1.0 and T=0.0 values
-    ConstantCoefficient hot_temp(1.0);
-    ConstantCoefficient cold_temp(0.0);
+    ConstantCoefficient cold_temp(293.15);
+    ConstantCoefficient hot_temp(1220.0);
     
-    Array<int> hot_bdr(mesh.bdr_attributes.Max());
-    hot_bdr = 0; hot_bdr[1-1] = 1; // Set only Attr 1
-    x.ProjectBdrCoefficient(hot_temp, hot_bdr);
+    
+    for (auto &i : mesh.bdr_attributes) {
+        std::cout << "Boundary attribute: " << i << "\n";
+    }
 
     Array<int> cold_bdr(mesh.bdr_attributes.Max());
-    cold_bdr = 0; cold_bdr[2-1] = 1; // Set only Attr 2
+    cold_bdr = 0; cold_bdr[3-1] = 1; // Set only Attr 3
     x.ProjectBdrCoefficient(cold_temp, cold_bdr);
+
+    Array<int> hot_bdr(mesh.bdr_attributes.Max());
+    hot_bdr = 0; hot_bdr[13-1] = 1; // Set only Attr 13
+    x.ProjectBdrCoefficient(hot_temp, hot_bdr);
 
     // 9. Form the final linear system A*X = B
     SparseMatrix A;
     Vector B, X;
+    // No load, so b is zero
+    Vector b(fes.GetTrueVSize());
+    b = 0.0;
     a.FormLinearSystem(ess_tdof_list, x, b, A, X, B);
 
     // 10. Solve the linear system A*X = B
@@ -116,18 +100,15 @@ int main(int argc, char *argv[])
     if (myid == 0) {
         std::cout << "Saving solution to ParaView files...\n";
     }
-    ParaViewDataCollection paraview_dc("MyThermalSolution", &mesh);
-    paraview_dc.SetLevelsOfDetail(order); // Save high-order data
+    ParaViewDataCollection paraview_dc(output_dir, &mesh);
+    paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("Temperature", &x);
+    paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
 
     // 13. Finalize
     if (myid == 0) {
-        std::cout << "Done. Open 'MyThermalSolution/MyThermalSolution.pvd' in ParaView.\n";
+        std::cout << "Done. Open '" << output_dir << "/" << output_dir << ".pvd' in ParaView.\n";
     }
-#ifdef MFEM_USE_MPI
-    Mpi::Finalize();
-#endif
-
     return 0;
 }
