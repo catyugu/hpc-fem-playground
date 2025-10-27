@@ -27,6 +27,7 @@ with initial condition $u(x,0) = u_0(x)$ and appropriate boundary conditions.
 $$M \frac{du}{dt} + K u = b$$
 
 where:
+
 - $M$ is the mass matrix: $(M)_{ij} = \int_\Omega \phi_i \phi_j$
 - $K$ is the stiffness matrix: $(K)_{ij} = \int_\Omega k \nabla\phi_i \cdot \nabla\phi_j$
 - $b$ is the load vector
@@ -278,6 +279,7 @@ $$\Delta t \leq C \frac{h^2}{k}$$
 where $h$ is mesh size, $k$ is diffusivity, and $C$ is a constant (typically $C \approx 0.5$ for Forward Euler).
 
 **Use cases:**
+
 - Small problems
 - Problems dominated by explicit source terms
 - Hyperbolic equations with appropriate CFL
@@ -291,6 +293,7 @@ $$\Delta t \sim O(h^p)$$
 where $p$ is the spatial discretization order for accuracy.
 
 **Use cases:**
+
 - Stiff problems (large diffusivity)
 - Long-time integration
 - Large time steps needed
