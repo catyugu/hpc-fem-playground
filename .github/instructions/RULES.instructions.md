@@ -26,3 +26,4 @@ applyTo: '**'
    - Constant: UPPER_SNAKE_CASE
    - File/Folder: lowercase_with_underscores/Keep the same name as the main class inside
    - Test Case: test_case_description_with_underscores
+17. **Put .hpp files and .cpp files in the same location in the `src`**

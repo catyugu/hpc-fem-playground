@@ -28,6 +28,11 @@ add_executable(test_physics_coupling test_physics_coupling.cpp)
 target_link_libraries(test_physics_coupling PRIVATE mfem)
 add_test(NAME test_physics_coupling COMMAND test_physics_coupling)
 
+# Test 6: Solver interface compile test (Phase 2, Step 2.1)
+add_executable(test_solver_interface test_solver_interface.cpp)
+target_link_libraries(test_solver_interface PRIVATE mfem)
+add_test(NAME test_solver_interface COMMAND test_solver_interface)
+
 # For parallel tests with MPI
 if(MFEM_USE_MPI)
     find_package(MPI REQUIRED)
@@ -43,4 +48,7 @@ if(MFEM_USE_MPI)
     add_test(NAME test_physics_coupling_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_physics_coupling> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_solver_interface_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_interface> ${MPIEXEC_POSTFLAGS})
 endif()
