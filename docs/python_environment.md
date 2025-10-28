@@ -72,6 +72,7 @@ Expected output: `OK`
 ### "ModuleNotFoundError: No module named 'matplotlib'"
 
 Make sure the conda environment is activated:
+
 ```bash
 conda activate hpc-fem-playground
 pip install matplotlib numpy
@@ -80,12 +81,14 @@ pip install matplotlib numpy
 ### Wrong Python version
 
 Check which Python is being used:
+
 ```bash
 which python
 # Should show: ~/miniconda3/envs/hpc-fem-playground/bin/python
 ```
 
 If not, activate the environment:
+
 ```bash
 conda activate hpc-fem-playground
 ```

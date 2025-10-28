@@ -90,7 +90,7 @@ python3 plot_results.py results_weak.csv \
 
 The benchmark application outputs parseable results:
 
-```
+```bash
 === Poisson Solver Benchmark ===
 Solver type: ddm
 Mesh size: 32x32
@@ -110,6 +110,7 @@ PROCS: 4
 ```
 
 Key metrics:
+
 - `DOFS`: Total degrees of freedom
 - `ASSEMBLE_TIME`: Time to assemble linear system (seconds)
 - `SOLVE_TIME`: Time to solve linear system (seconds)
@@ -122,7 +123,7 @@ Key metrics:
 
 ### benchmark_poisson
 
-```
+```bash
 Options:
   --solver TYPE      Solver type: 'amg' or 'ddm' (default: amg)
   --mesh-size N      Mesh elements per dimension (default: 16)
@@ -132,7 +133,7 @@ Options:
 
 ### run_scaling.py
 
-```
+```bash
 Options:
   --study TYPE           Scaling study: 'strong' or 'weak'
   --solvers SOLVERS      Solvers to benchmark: 'amg', 'ddm', or both (default: both)
@@ -146,7 +147,7 @@ Options:
 
 ### plot_results.py
 
-```
+```bash
 Options:
   input              Input CSV file from run_scaling.py
   --study TYPE       Scaling study: 'strong' or 'weak'
@@ -220,6 +221,6 @@ pip install matplotlib numpy
 
 ## References
 
-- Strong scaling: https://en.wikipedia.org/wiki/Scalability#Strong_scaling
-- Weak scaling: https://en.wikipedia.org/wiki/Scalability#Weak_scaling
-- Parallel efficiency: https://en.wikipedia.org/wiki/Parallel_efficiency
+- Strong scaling: <https://en.wikipedia.org/wiki/Scalability#Strong_scaling>
+- Weak scaling: <https://en.wikipedia.org/wiki/Scalability#Weak_scaling>
+- Parallel efficiency: <https://en.wikipedia.org/wiki/Parallel_efficiency>

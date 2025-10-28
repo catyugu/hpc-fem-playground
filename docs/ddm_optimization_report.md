@@ -71,6 +71,7 @@ for (int iter = 0; iter < maxIter_; ++iter)
 ### Why More Iterations?
 
 The optimized version uses:
+
 - Tighter tolerance: `1e-12` (was `1e-6`)
 - More accurate convergence criterion
 - More iterations expected, but each is **much faster**
@@ -78,10 +79,12 @@ The optimized version uses:
 ### Cost Breakdown
 
 **Before optimization:**
+
 - Per-iteration cost: AMG setup (90%) + solve (10%)
 - Total time: 27 × (setup + solve) = very slow
 
 **After optimization:**
+
 - Setup cost: 1 × AMG setup (amortized)
 - Per-iteration cost: solve only
 - Total time: setup + 58 × solve = **3.6x faster**
@@ -89,10 +92,12 @@ The optimized version uses:
 ### DDM vs AMG Comparison
 
 Current status:
+
 - AMG: 0.0024s, 20 iterations
 - DDM: 0.0043s, 58 iterations (1.8x slower)
 
 DDM overhead sources:
+
 1. Richardson iteration less efficient than CG/GMRES
 2. Block Jacobi (no overlap) reduces preconditioner quality
 3. MPI communication overhead in parallel
@@ -106,19 +111,21 @@ DDM overhead sources:
 ## Recommendations
 
 ### Immediate (Done)
+
 - ✅ Fix SetOperator() placement
 - ✅ Use same tolerance for fair comparison (1e-12)
 - ✅ Clean include paths
 
 ### Future Optimizations (Optional)
+
 1. **Add overlap regions:** Current is block Jacobi (no overlap)
    - Expected benefit: 20-30% faster convergence
    - Implementation complexity: Moderate
-   
+
 2. **Use CG with Schwarz preconditioner:** Replace Richardson iteration
    - Expected benefit: 30-40% fewer iterations
    - Implementation complexity: Low (MFEM has CG)
-   
+
 3. **Tune relaxation parameter:** Test `omega ∈ [0.5, 1.5]`
    - Expected benefit: 10-20% improvement
    - Implementation complexity: Trivial
@@ -130,12 +137,14 @@ DDM overhead sources:
 ## Validation
 
 All tests passing:
-```
+
+```bash
 test_solver_ddm_schwarz ............... Passed (19 iters, error 2.46e-04)
 test_solver_ddm_schwarz_parallel ...... Passed (25 iters, error 2.46e-04)
 ```
 
 Convergence properties:
+
 - ✅ L2 error < 1e-3 tolerance
 - ✅ Monotonic residual reduction
 - ✅ Reproducible across runs
