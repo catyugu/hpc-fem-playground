@@ -39,5 +39,9 @@ add_subdirectory(src)
 add_library(HPC_FEM_PLAYGROUND_LIB INTERFACE)
 target_link_libraries(HPC_FEM_PLAYGROUND_LIB INTERFACE mfem)
 
+# Enable testing
+enable_testing()
+add_subdirectory(tests)
+
 add_subdirectory(example)
 add_subdirectory(benchmark)
