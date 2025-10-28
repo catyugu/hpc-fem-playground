@@ -182,12 +182,12 @@ int main(int argc, char *argv[])
     // ============================================================
 
     // Electric BC: voltage applied at x=0 and x=L
-    // Attribute 1: x=0 (ground, φ=0)
-    // Attribute 2: x=L (applied voltage, φ=V)
+    // Attribute 5: x=0 (ground, φ=0)
+    // Attribute 3: x=L (applied voltage, φ=V)
     Array<int> elec_ess_bdr(mesh.bdr_attributes.Max());
     elec_ess_bdr = 0;
-    elec_ess_bdr[0] = 1; // x=0
-    elec_ess_bdr[1] = 1; // x=L
+    elec_ess_bdr[4] = 1; // x=0
+    elec_ess_bdr[2] = 1; // x=L
 
     Array<int> elec_ess_tdof_list;
     fes_potential.GetEssentialTrueDofs(elec_ess_bdr, elec_ess_tdof_list);
@@ -212,10 +212,10 @@ int main(int argc, char *argv[])
     // Apply electric boundary conditions
     Array<int> bc_x0(mesh.bdr_attributes.Max());
     bc_x0 = 0;
-    bc_x0[0] = 1;
+    bc_x0[4] = 1;
     Array<int> bc_xL(mesh.bdr_attributes.Max());
     bc_xL = 0;
-    bc_xL[1] = 1;
+    bc_xL[2] = 1;
 
     ConstantCoefficient zero_volt(0.0);
     ConstantCoefficient applied_volt(V_applied);
