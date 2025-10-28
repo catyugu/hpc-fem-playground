@@ -1,6 +1,16 @@
 # Test configuration for HPC-FEM-PLAYGROUND
 cmake_minimum_required(VERSION 3.16)
 
+# Fetch GoogleTest using CPM
+CPMAddPackage(
+    NAME googletest
+    GITHUB_REPOSITORY google/googletest
+    VERSION 1.14.0
+    OPTIONS
+        "INSTALL_GTEST OFF"
+        "gtest_force_shared_crt ON"
+)
+
 enable_testing()
 
 # Test 1: Verify MFEM linkage
@@ -15,40 +25,32 @@ add_test(NAME test_mfem_baseline COMMAND test_mfem_baseline)
 
 # Test 3: Electrostatics MMS test (Phase 1, Step 1.1)
 add_executable(test_physics_electrostatics test_physics_electrostatics.cpp)
-target_link_libraries(test_physics_electrostatics PRIVATE mfem)
+target_link_libraries(test_physics_electrostatics PRIVATE hpcfem gtest_main)
 add_test(NAME test_physics_electrostatics COMMAND test_physics_electrostatics)
 
 # Test 4: Thermal MMS test (Phase 1, Step 1.2)
 add_executable(test_physics_thermal test_physics_thermal.cpp)
-target_link_libraries(test_physics_thermal PRIVATE mfem)
+target_link_libraries(test_physics_thermal PRIVATE hpcfem gtest_main)
 add_test(NAME test_physics_thermal COMMAND test_physics_thermal)
 
 # Test 5: One-way coupled Joule heating (Phase 1, Step 1.3)
 add_executable(test_physics_coupling test_physics_coupling.cpp)
-target_link_libraries(test_physics_coupling PRIVATE mfem)
+target_link_libraries(test_physics_coupling PRIVATE hpcfem gtest_main)
 add_test(NAME test_physics_coupling COMMAND test_physics_coupling)
 
 # Test 6: Solver interface compile test (Phase 2, Step 2.1)
 add_executable(test_solver_interface test_solver_interface.cpp)
-target_link_libraries(test_solver_interface PRIVATE mfem)
+target_link_libraries(test_solver_interface PRIVATE hpcfem gtest_main)
 add_test(NAME test_solver_interface COMMAND test_solver_interface)
 
 # Test 7: HYPRE AMG Solver test (Phase 2, Step 2.2)
-add_executable(test_solver_hypre_amg 
-    test_solver_hypre_amg.cpp
-    ../src/hpcfem/solver_hypre_amg.cpp)
-target_include_directories(test_solver_hypre_amg PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_solver_hypre_amg PRIVATE mfem)
+add_executable(test_solver_hypre_amg test_solver_hypre_amg.cpp)
+target_link_libraries(test_solver_hypre_amg PRIVATE hpcfem gtest_main)
 add_test(NAME test_solver_hypre_amg COMMAND test_solver_hypre_amg)
 
 # Test 8: Problem abstraction test (Phase 2, Step 2.3)
-add_executable(test_problem_abstraction 
-    test_problem_abstraction.cpp
-    ../src/hpcfem/solver_hypre_amg.cpp
-    ../src/hpcfem/physics_electrostatics.cpp
-    ../src/hpcfem/fem_problem.cpp)
-target_include_directories(test_problem_abstraction PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_problem_abstraction PRIVATE mfem)
+add_executable(test_problem_abstraction test_problem_abstraction.cpp)
+target_link_libraries(test_problem_abstraction PRIVATE hpcfem gtest_main)
 add_test(NAME test_problem_abstraction COMMAND test_problem_abstraction)
 
 # For parallel tests with MPI

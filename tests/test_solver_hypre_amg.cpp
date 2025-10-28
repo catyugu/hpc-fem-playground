@@ -8,7 +8,7 @@
  * the Poisson problem using the SolverInterface abstraction.
  */
 
-#include "../src/hpcfem/solver_hypre_amg.hpp"
+#include "hpcfem/solver_hypre_amg.hpp"
 #include "mfem.hpp"
 #include <iostream>
 #include <cmath>
