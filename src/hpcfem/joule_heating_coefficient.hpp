@@ -5,7 +5,7 @@
  * Implements a grid function coefficient that computes the Joule heating
  * power density from the electric field gradient.
  * 
- * Phase: 3, Step: 3.2 (nonlinear coupling)
+
  */
 
 #ifndef HPCFEM_JOULE_HEATING_COEFFICIENT_HPP

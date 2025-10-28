@@ -1,8 +1,6 @@
 /**
  * @file physics_thermal.cpp
  * @brief Implementation of thermal diffusion physics
- * 
- * Phase: 3, Step: 3.1
  */
 
 #include "physics_thermal.hpp"

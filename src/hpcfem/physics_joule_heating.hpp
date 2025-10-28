@@ -13,7 +13,6 @@
  * 
  * where C(V) represents the linearized coupling ∂Q/∂V for Newton iteration
  * 
- * Phase: 3, Step: 3.2 (nonlinear coupling complete)
  */
 
 #ifndef HPCFEM_PHYSICS_JOULE_HEATING_HPP

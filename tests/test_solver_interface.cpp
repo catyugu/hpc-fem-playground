@@ -2,7 +2,6 @@
  * @file test_solver_interface.cpp
  * @brief Compile-only test for the SolverInterface abstract base class
  * 
- * Phase: 2, Step: 2.1
  * 
  * This test verifies that:
  * 1. The header can be included without errors

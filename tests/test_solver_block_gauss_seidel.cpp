@@ -5,7 +5,7 @@
  * Tests the physics-informed block-triangular preconditioning strategy
  * for coupled multiphysics systems.
  * 
- * Phase: 3, Step: 3.2
+
  */
 
 #include <gtest/gtest.h>

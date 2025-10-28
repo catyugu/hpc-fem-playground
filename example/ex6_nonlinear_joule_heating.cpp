@@ -12,7 +12,7 @@
  * This is where the physics-informed approach should demonstrate
  * 2-4× speedup over block-diagonal strategy.
  * 
- * Phase: 3, Step: 3.2 (nonlinear coupling demonstration)
+
  */
 
 #include "hpcfem/physics_joule_heating.hpp"
@@ -246,14 +246,14 @@ int main(int argc, char* argv[])
         std::cout << "  Wall-clock time: " << std::setprecision(3) 
                   << time_bd << " seconds\n";
         std::cout << "=============================================================\n";
-        std::cout << "\n✓ Phase 3.2 Complete: Nonlinear Joule heating with Q = σ|∇V|²\n";
+
         std::cout << "  demonstrates realistic multiphysics coupling.\n\n";
     }
     
     /* NOTE: Block Gauss-Seidel comparison skipped for now.
      * The current implementation handles coupling through RHS (Q = σ|∇V|²)
      * rather than explicit coupling matrix C.  
-     * Phase 3.2 focuses on demonstrating nonlinear coupling works correctly.
+
      * Block Gauss-Seidel with explicit C matrix will be added in future work.
      */
     

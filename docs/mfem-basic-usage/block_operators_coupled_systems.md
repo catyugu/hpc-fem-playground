@@ -2,7 +2,6 @@
 
 **Author:** HPC-FEM-Playground Team  
 **Date:** October 2025  
-**Phase:** 3 (Physics-Informed Multiphysics Solvers)
 
 ## Overview
 
@@ -562,7 +561,7 @@ for (int iter = 0; iter < 10; ++iter)
   - `ex5p.cpp` (2D Darcy flow, block systems)
   - `ex42p.cpp` (Grad-div block system)
 - **Theory**: "Block Preconditioners" (Elman, Silvester, Wathen, 2014)
-- **Implementation**: `src/hpcfem/solver_block_gauss_seidel.cpp` (Phase 3.2)
+- **Implementation**: `src/hpcfem/solver_block_gauss_seidel.cpp`
 
 ## Summary
 

@@ -9,7 +9,7 @@ applyTo: '**'
 3. **Always check to avoid enum conflicts.**
 4. **No code nesting.** No struct/class/enum inside struct/class.
 5. **Naming uniqueness.** Everytime you introduce new class/enum/struct, document them in `docs/hpcfem-doc`, and check to avoid duplication before adding new ones.
-6. **Use Doxygen-style comments.**
+6. **Use Doxygen-style comments.** The comments must be clean, with only interface description, functionalities and TODOs(If any). **NEVER MARK PROGRESS IN COMMENTS.**
 7. Guarantee that all the examples/tests/benchmarks can all compile and run smoothly before a `commit`
 8. If for anything you only made interface or simplified implementation, please EXPLICITLY mark it as `TODO` in comment. And you should clear up all the TODOs before a `merge`.
 9. **use `git` for version management, usually you work on `dev` branch.** If a large scale refactor is needed, please open an `unstable` branch to do it. After refactor completes, merge it to the `dev` branch. For every markstone you've reached, please merge from `dev` to `master`.
@@ -30,3 +30,7 @@ applyTo: '**'
 18. **Clean include path:** No use of relative path in include like `../`, instead, always configure the include path property in CMakeLists.txt
 19. **Correct Python configuration if needed:** Use the conda environment `hpc-fem-playground` for python use.
 20. **Proper problems setup:** All the problem setup in tests and examples should be aligned to pratical use (3D cases preferred, vector field preferred).
+21. **Build correctly:** Debug build in `cmake-build-debug`, Release build in `cmake-build-release`.
+22. **Plan and checklists:** For the future developers to take on your work, please always provide a plan document with clear todos and checklists. Before implementing anything, check out the document file. Whenever you finished something in the checklist, please update the document.
+23. **Proper cmake configuration:** Use CPM to mangage dependencies. After any update on cmake scripts, you should rerun configuration before rebuild.
+24. **Properly arrage the file:** Traditionally you shouldn't put more than 15 files in a directory. If you're doing so, you should consider refactoring.

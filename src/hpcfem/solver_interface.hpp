@@ -2,7 +2,7 @@
  * @file solver_interface.hpp
  * @brief Abstract base class for all linear solvers in the hpcfem library
  * 
- * Phase: 2, Step: 2.1
+
  * 
  * This interface defines the contract for all linear solvers.
  * Concrete implementations will wrap various solver backends (HYPRE, PETSc, etc.)

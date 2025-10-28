@@ -2,7 +2,7 @@
  * @file test_physics_interface_mock.cpp
  * @brief Mock test for PhysicsInterface contract verification
  * 
- * Phase: 1, Step: 1.2
+
  * 
  * This test verifies the contract of the PhysicsInterface:
  * - Mock physics can be instantiated

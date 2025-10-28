@@ -5,7 +5,6 @@
  * Implements the steady-state heat equation: ∇·(κ∇T) = Q
  * where κ is the thermal conductivity and Q is the heat source term.
  * 
- * Phase: 3, Step: 3.1
  */
 
 #ifndef HPCFEM_PHYSICS_THERMAL_HPP

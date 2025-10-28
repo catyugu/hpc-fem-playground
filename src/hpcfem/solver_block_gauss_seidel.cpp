@@ -2,7 +2,7 @@
  * @file solver_block_gauss_seidel.cpp
  * @brief Implementation of block Gauss-Seidel preconditioner
  * 
- * Phase: 3, Step: 3.2
+
  */
 
 #include "solver_block_gauss_seidel.hpp"

@@ -2,7 +2,7 @@
  * @file solver_hypre_amg.hpp
  * @brief Concrete HYPRE BoomerAMG solver implementation
  * 
- * Phase: 2, Step: 2.2
+
  * 
  * This class wraps MFEM's HypreBoomerAMG preconditioner as a complete
  * linear solver that implements the SolverInterface.

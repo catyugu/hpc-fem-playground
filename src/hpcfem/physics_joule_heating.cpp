@@ -2,7 +2,7 @@
  * @file physics_joule_heating.cpp
  * @brief Implementation of coupled Joule heating physics with nonlinear coupling
  * 
- * Phase: 3, Step: 3.2 (nonlinear coupling complete)
+
  */
 
 #include "physics_joule_heating.hpp"

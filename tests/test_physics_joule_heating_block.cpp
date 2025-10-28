@@ -2,7 +2,7 @@
  * @file test_physics_joule_heating_block.cpp
  * @brief Test for monolithic 2×2 block system Joule heating
  * 
- * Phase: 3, Step: 3.1
+
  * 
  * This test verifies the JouleHeatingPhysics class which assembles
  * a coupled electro-thermal system as a 2×2 BlockOperator:

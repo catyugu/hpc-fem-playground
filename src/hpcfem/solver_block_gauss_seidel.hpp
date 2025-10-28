@@ -5,7 +5,7 @@
  * Implements physics-informed block-triangular preconditioning strategy that
  * exploits the one-way coupling structure in systems like Joule heating.
  * 
- * Phase: 3, Step: 3.2
+
  */
 
 #ifndef HPCFEM_SOLVER_BLOCK_GAUSS_SEIDEL_HPP

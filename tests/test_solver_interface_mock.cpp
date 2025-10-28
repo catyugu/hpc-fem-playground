@@ -2,7 +2,7 @@
  * @file test_solver_interface_mock.cpp
  * @brief Mock test for SolverInterface contract verification
  * 
- * Phase: 1, Step: 1.2
+
  * 
  * This test verifies the contract of the SolverInterface:
  * - Mock solver can be instantiated

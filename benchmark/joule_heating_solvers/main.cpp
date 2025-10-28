@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief Benchmark comparing solver strategies for Joule heating problem
  * 
- * This benchmark implements Phase 3.2 of DEVELOPMENT.prompt.md, comparing:
+ * This benchmark is comparing:
  * 1. Block-diagonal preconditioner (monolithic/black-box approach)
  * 2. Block Gauss-Seidel preconditioner (physics-informed approach)
  * 
