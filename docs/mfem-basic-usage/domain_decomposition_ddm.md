@@ -24,6 +24,7 @@ delete serial_mesh;
 ```
 
 **What happens:**
+
 - MFEM automatically uses METIS to partition the mesh graph
 - Each MPI rank gets a local subdomain with ghost/shared elements
 - `pmesh->GetSharedFaceDofs()` identifies interface DOFs
@@ -41,6 +42,7 @@ int local_dofs = fespace.GetTrueVSize();                // DOFs owned by this ra
 ```
 
 **True DOFs vs. Local DOFs:**
+
 - **Local DOFs**: All DOFs visible to this rank (owned + shared)
 - **True DOFs**: DOFs uniquely owned by this rank (no duplicates)
 - MFEM handles the parallel communication automatically
@@ -59,6 +61,7 @@ mfem::HypreParMatrix* localMatrix = globalMatrix->GetDiag();
 ```
 
 **Memory Management Warning:**
+
 - `GetDiag()` returns a pointer to internal data
 - The returned matrix is owned by the parent `HypreParMatrix`
 - Deleting it manually causes double-free errors
@@ -73,6 +76,7 @@ M^{-1} = \sum_{i=1}^{N} R_i^T A_i^{-1} R_i
 $$
 
 Where:
+
 - $N$ = number of subdomains (MPI ranks)
 - $R_i$ = restriction operator to subdomain $i$
 - $A_i$ = local subdomain matrix
@@ -169,7 +173,7 @@ $$
 
 ### Implementation Challenges in MFEM
 
-**Challenge 1: Prolongation Operator Construction**
+#### Challenge 1: Prolongation Operator Construction
 
 MFEM provides `ParFiniteElementSpace::Dof_TrueDof_Matrix()` for parallel DOF mappings, but building custom restriction/prolongation between different FE spaces is non-trivial:
 
@@ -186,7 +190,7 @@ mfem::HypreParMatrix* P = coarseSpace.Dof_TrueDof_Matrix();
 
 **What's needed:** A custom interpolation operator that takes coefficients from coarse H1 space and evaluates them at fine H1 DOF locations.
 
-**Challenge 2: Galerkin Projection**
+#### Challenge 2: Galerkin Projection
 
 Computing $A_H = \Psi^T A \Psi$ requires triple matrix product:
 
@@ -201,7 +205,7 @@ delete Psi_T;
 
 This works when `Psi` is a proper `HypreParMatrix`, but constructing `Psi` itself is the bottleneck.
 
-**Challenge 3: Memory Ownership**
+#### Challenge 3: Memory Ownership
 
 ```cpp
 // INCORRECT - causes segfault:
@@ -223,6 +227,7 @@ This works when `Psi` is a proper `HypreParMatrix`, but constructing `Psi` itsel
 As of Phase 2.2, the two-level Schwarz class exists as a **framework**:
 
 ✅ **Implemented:**
+
 - Class structure and interface
 - Local subdomain solves (one-level part)
 - Coarse FE space creation
@@ -230,6 +235,7 @@ As of Phase 2.2, the two-level Schwarz class exists as a **framework**:
 - AMG solver for coarse problem
 
 ⚠️ **TODO (explicitly marked in code):**
+
 - Proper prolongation operator $\Psi$ construction
 - Galerkin projection $A_H = \Psi^T A \Psi$
 - Restriction $\Psi^T x$ in `Mult()`
@@ -363,18 +369,21 @@ if (myRank == 0)
 ## Summary
 
 **What Works:**
+
 - One-level Schwarz with local Gauss-Seidel smoothers
 - Automatic parallel mesh partitioning
 - Local subdomain matrix extraction
 - Integration with MFEM's parallel Krylov solvers
 
 **What's Challenging:**
+
 - Custom prolongation operator construction
 - Galerkin projection for coarse operator
 - Balancing local solve cost vs. global iterations
 
 **Best Practice:**
 For production code, use MFEM's built-in AMG (HYPRE BoomerAMG) or geometric multigrid unless you need specialized DDM features. DDM is most valuable for:
+
 - Highly heterogeneous problems (domain-wise material properties)
 - Problems where geometric coarsening is difficult
 - Coupling with specialized subdomain solvers

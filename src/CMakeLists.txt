@@ -3,6 +3,7 @@ add_library(hpcfem
     hpcfem/fem_problem.cpp
     hpcfem/physics_electrostatics.cpp
     hpcfem/physics_thermal.cpp
+    hpcfem/physics_joule_heating.cpp
     hpcfem/solver_hypre_amg.cpp
     hpcfem/solver_one_level_schwarz.cpp
     hpcfem/solver_two_level_schwarz.cpp

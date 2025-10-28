@@ -24,14 +24,17 @@ Successfully completed Phase 1.2 by creating comprehensive **mock interface test
 ### New Test Files
 
 #### 1. `tests/test_solver_interface_mock.cpp`
+
 **Purpose:** Verify `SolverInterface` contract
 
 **Test Cases:**
+
 - `MockSolverInstantiation`: Verify mock can be instantiated and tracks calls
 - `SolveMethodCall`: Test that `solve()` can be called through interface
 - `Polymorphism`: Verify polymorphic behavior through base class pointer
 
 **Mock Implementation:**
+
 ```cpp
 class MockSolver : public SolverInterface {
     // Tracks solve() call count
@@ -40,15 +43,18 @@ class MockSolver : public SolverInterface {
 ```
 
 #### 2. `tests/test_physics_interface_mock.cpp`
+
 **Purpose:** Verify `PhysicsInterface` contract
 
 **Test Cases:**
+
 - `MockPhysicsInstantiation`: Verify mock can be instantiated with valid FE space
 - `AssembleMethodCall`: Test that `assemble()` can be called through interface  
 - `Polymorphism`: Verify polymorphic behavior through base class pointer
 - `FiniteElementSpace`: Test that `getFiniteElementSpace()` returns valid space
 
 **Mock Implementation:**
+
 ```cpp
 class MockPhysics : public PhysicsInterface {
     // Owns H1 FE collection and space
@@ -59,12 +65,14 @@ class MockPhysics : public PhysicsInterface {
 ### Updated Files
 
 #### `tests/CMakeLists.txt`
+
 - Added `test_solver_interface_mock` executable
 - Added `test_physics_interface_mock` executable
 - Added parallel test configurations for both
 - Both link to `hpcfem` library and `gtest_main`
 
 #### `docs/hpcfem-doc/naming_registry.md`
+
 - Reorganized for clarity with categories
 - Added documentation status for interfaces (Pure virtual ✓)
 - Documented mock test classes
@@ -74,33 +82,41 @@ class MockPhysics : public PhysicsInterface {
 ## Interface Verification
 
 ### PhysicsInterface ✅
+
 **Status:** Pure abstract base class
 **Location:** `src/hpcfem/physics_interface.hpp`
 
 **Pure Virtual Methods:**
+
 - `virtual void assemble(...) = 0;`
 - `virtual FiniteElementSpace* getFiniteElementSpace() = 0;`
 - `virtual ~PhysicsInterface() = default;`
 
 **Concrete Implementations:**
+
 - ✅ `ElectrostaticsPhysics` (tested in `test_physics_electrostatics.cpp`)
 
 ### SolverInterface ✅  
+
 **Status:** Pure abstract base class
 **Location:** `src/hpcfem/solver_interface.hpp`
 
 **Pure Virtual Methods:**
+
 - `virtual void solve(...) = 0;`
 - `virtual ~SolverInterface() = default;`
 
 **Concrete Implementations:**
+
 - ✅ `HypreAmgSolver` (tested in `test_solver_hypre_amg.cpp`)
 
 ### FemProblem ✅
+
 **Status:** Concrete orchestration class
 **Location:** `src/hpcfem/fem_problem.hpp/cpp`
 
 **Current Design:**
+
 - References (not owns) mesh, physics, solver
 - Owns: system matrix `A_`, vectors `b_`, `x_`, grid function
 - Manages assembly and solve workflow
@@ -111,7 +127,7 @@ class MockPhysics : public PhysicsInterface {
 
 ### All Tests Passing (19/19)
 
-```
+```bash
 Test #178: test_mfem_linkage ........................ PASSED
 Test #179: test_mfem_baseline ....................... PASSED
 Test #180: test_physics_electrostatics .............. PASSED
@@ -171,11 +187,13 @@ The existing interfaces already meet all TDD requirements:
 ### Mock Implementation Strategy
 
 **MockSolver:**
+
 - Simplest possible implementation: copies `b` to `x`
 - Tracks call count for verification
 - Works with both serial and parallel matrices
 
 **MockPhysics:**
+
 - Creates real H1 FE space (required for valid interface)
 - Mock assembly: just sizes output vectors
 - Properly manages FE collection/space lifecycle
@@ -183,6 +201,7 @@ The existing interfaces already meet all TDD requirements:
 ### Parallel Testing
 
 Both mock tests work correctly in parallel:
+
 - Use `MPI_COMM_WORLD` for parallel mesh/matrix creation
 - Properly initialize/finalize MPI
 - Create valid `HypreParMatrix` via bilinear form assembly
@@ -190,6 +209,7 @@ Both mock tests work correctly in parallel:
 ## Next Steps
 
 Proceed to **Phase 2.1: TDD - One-Level DDM (Benchmark for Failure)**
+
 - Implement one-level overlapping Schwarz preconditioner
 - Create scalability benchmark
 - Demonstrate poor scaling to motivate two-level method

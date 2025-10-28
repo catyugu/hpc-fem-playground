@@ -24,9 +24,9 @@ Successfully implemented a one-level overlapping Schwarz (Additive Schwarz) prec
 
 A preconditioner implementing the one-level overlapping Schwarz method:
 
-```
+$$
 M^{-1} = ∑_{i=1}^{N} R_i^T A_i^{-1} R_i
-```
+$$
 
 Where:
 

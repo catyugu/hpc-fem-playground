@@ -49,6 +49,7 @@ Q_{ext}
 $$
 
 Where:
+
 - $V$ = electric potential
 - $T$ = temperature
 - $K_e$ = electrical conductivity matrix (temperature-dependent)
@@ -86,6 +87,7 @@ A.SetBlock(1, 1, &K_t);  // Block (1,1) = K_t
 ```
 
 **Memory management:**
+
 - `SetBlock()` stores pointers, doesn't copy matrices
 - You own the block matrices, `BlockOperator` doesn't delete them
 - Blocks must outlive the `BlockOperator`
@@ -156,6 +158,7 @@ A.SetBlock(1, 1, K_t);
 ```
 
 **Key integrators for coupling:**
+
 - `MixedGradGradIntegrator`: $\int \nabla u \cdot \nabla v \, dx$ (different spaces)
 - `MixedVectorGradientIntegrator`: $\int (\nabla u) \cdot v \, dx$
 - `MixedScalarVectorIntegrator`: $\int u \cdot v \, dx$ (scalar-vector coupling)
@@ -254,10 +257,12 @@ gmres.Mult(b, x);
 ```
 
 **Pros:**
+
 - Simple to implement
 - No physics knowledge required
 
 **Cons:**
+
 - Ignores block structure
 - Poor convergence for ill-conditioned coupled systems
 - High memory usage
@@ -267,7 +272,7 @@ gmres.Mult(b, x);
 **Approach:** Precondition each diagonal block separately
 
 $$
-\tilde{M}^{-1} = 
+\tilde{M}^{-1} =
 \begin{pmatrix}
 K_e^{-1} & 0 \\
 0 & K_t^{-1}
@@ -314,10 +319,12 @@ gmres.Mult(b, x);
 ```
 
 **Pros:**
+
 - Exploits block structure
 - Can reuse existing preconditioners (AMG, ILU, etc.)
 
 **Cons:**
+
 - Ignores off-diagonal coupling
 - Convergence degrades if coupling is strong
 
@@ -326,7 +333,7 @@ gmres.Mult(b, x);
 **Approach:** Physics-informed forward substitution
 
 $$
-\tilde{M}^{-1} = 
+\tilde{M}^{-1} =
 \begin{pmatrix}
 K_e^{-1} & 0 \\
 -K_t^{-1} C K_e^{-1} & K_t^{-1}
@@ -383,11 +390,13 @@ public:
 ```
 
 **Pros:**
+
 - Accounts for block-triangular structure
 - **Much better convergence** than block-diagonal for one-way coupled problems
 - Natural for problems where one field drives another (e.g., Joule heating)
 
 **Cons:**
+
 - Requires explicit coupling matrix $C$
 - Sequential: can't parallelize block solves across physics
 - Less effective for symmetric/bidirectional coupling
@@ -420,10 +429,12 @@ void Mult(const mfem::Vector& x, mfem::Vector& y) const override
 ```
 
 **Pros:**
+
 - Symmetric preconditioner (good for CG)
 - Better convergence than forward-only GS
 
 **Cons:**
+
 - 2× the cost per iteration
 - Requires $C^T$ (transpose of coupling)
 
@@ -547,7 +558,7 @@ for (int iter = 0; iter < 10; ++iter)
 
 ## References
 
-- **MFEM Examples**: 
+- **MFEM Examples**:
   - `ex5p.cpp` (2D Darcy flow, block systems)
   - `ex42p.cpp` (Grad-div block system)
 - **Theory**: "Block Preconditioners" (Elman, Silvester, Wathen, 2014)
@@ -556,6 +567,7 @@ for (int iter = 0; iter < 10; ++iter)
 ## Summary
 
 **Key Takeaways:**
+
 - Block operators avoid forming monolithic matrices
 - Physics-informed preconditioners exploit problem structure
 - Block-triangular is ideal for one-way coupled systems
