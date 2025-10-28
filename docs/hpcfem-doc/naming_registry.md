@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28 (Phase 2.2)
+**Last Updated:** 2025-10-28 (Phase 3.1 - In Progress)
 
 ## Namespaces
 
@@ -27,6 +27,11 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `ElectrostaticsPhysics` - Electrostatics physics (Poisson equation) (src/hpcfem/physics_electrostatics.hpp/cpp)
   - **Implements:** `PhysicsInterface`
   - **Equation:** ∇·(σ∇φ) = f
+
+- `ThermalPhysics` - Thermal diffusion physics (src/hpcfem/physics_thermal.hpp/cpp)
+  - **Implements:** `PhysicsInterface`
+  - **Equation:** ∇·(κ∇T) = Q
+  - **Phase:** 3.1
   
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
@@ -70,6 +75,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 ### Physics Modules
 - `src/hpcfem/physics_electrostatics.hpp` - Electrostatics physics header
 - `src/hpcfem/physics_electrostatics.cpp` - Electrostatics physics implementation
+- `src/hpcfem/physics_thermal.hpp` - Thermal diffusion physics header (Phase 3.1)
+- `src/hpcfem/physics_thermal.cpp` - Thermal diffusion physics implementation (Phase 3.1)
 
 ### Solver Modules
 - `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header

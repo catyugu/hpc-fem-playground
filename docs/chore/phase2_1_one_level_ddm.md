@@ -29,18 +29,21 @@ M^{-1} = ∑_{i=1}^{N} R_i^T A_i^{-1} R_i
 ```
 
 Where:
+
 - N = number of subdomains (MPI processes)
 - R_i = restriction operator to subdomain i
 - A_i = local matrix on subdomain i
 - A_i^{-1} approximated by Gauss-Seidel smoother
 
 **Key Design Decisions:**
+
 - Extends `mfem::Solver` to act as a preconditioner
 - Uses `HypreParMatrix::GetDiag()` to extract local subdomain matrix
 - Uses `mfem::GSSmoother` as the local subdomain solver
 - Temporary vectors (`localX_`, `localY_`) marked `mutable` for const-correct `Mult()`
 
 **API:**
+
 ```cpp
 // Constructor takes the parallel matrix
 explicit OneLevelSchwarz(const mfem::HypreParMatrix& A);
@@ -54,6 +57,7 @@ void Mult(const mfem::Vector& x, mfem::Vector& y) const override;
 **Purpose:** Verify correctness of the one-level Schwarz preconditioner
 
 **Problem Setup:**
+
 - 3D Poisson equation: -∇²u = f in [0,1]³
 - Manufactured solution: u(x,y,z) = sin(πx)sin(πy)sin(πz)
 - Forcing term: f = 3π²sin(πx)sin(πy)sin(πz)
@@ -62,11 +66,13 @@ void Mult(const mfem::Vector& x, mfem::Vector& y) const override;
 - Boundary: Homogeneous Dirichlet (all sides)
 
 **Test Criteria:**
+
 - ✅ CG solver converges (residual < 1e-12)
 - ✅ L2 error < 2e-3 (relaxed for coarse mesh)
 - ✅ Runs correctly with 4 MPI processes
 
 **Results:**
+
 - CG iterations: 23
 - L2 error: 0.00167
 - Status: **PASSED**
@@ -76,6 +82,7 @@ void Mult(const mfem::Vector& x, mfem::Vector& y) const override;
 **Purpose:** Demonstrate poor scalability of one-level method
 
 **Setup:**
+
 - Same 3D Poisson problem as test
 - Mesh size scales with processor count (work per processor constant)
 - Records iterations, solve time, L2 error to CSV file
@@ -91,6 +98,7 @@ void Mult(const mfem::Vector& x, mfem::Vector& y) const override;
 **Key Observation:** Iteration count increases from **28 → 32 → 47** as processor count goes from 2 → 4 → 8.
 
 **Analysis:**
+
 - This confirms the theoretical prediction that one-level Schwarz lacks scalability
 - As subdomains become smaller (more processes), information propagates slower across domain
 - Each subdomain only sees local information; no global coarse-grid correction
@@ -99,36 +107,44 @@ void Mult(const mfem::Vector& x, mfem::Vector& y) const override;
 ## Files Modified/Created
 
 ### New Implementation Files
+
 - ✅ `src/hpcfem/solver_one_level_schwarz.hpp` (96 lines)
 - ✅ `src/hpcfem/solver_one_level_schwarz.cpp` (76 lines)
 
 ### New Test Files
+
 - ✅ `tests/test_ddm_one_level.cpp` (145 lines)
 
 ### New Benchmark Files
+
 - ✅ `benchmark/poisson_scaling/poisson_scaling_ddm1.cpp` (161 lines)
 
 ### Modified Build Files
+
 - ✅ `src/CMakeLists.txt` - Added solver_one_level_schwarz.cpp to library
 - ✅ `tests/CMakeLists.txt` - Added test_ddm_one_level target and parallel variant
 - ✅ `benchmark/poisson_scaling/CMakeLists.txt` - Added benchmark_poisson_ddm1 target
 
 ### Updated Documentation
+
 - ✅ `docs/hpcfem-doc/naming_registry.md` - Registered OneLevelSchwarz class
 - ✅ `docs/chore/phase2_1_one_level_ddm.md` - This file
 
 ## Build and Test Results
 
 ### Compilation
+
 ```bash
 cd cmake-build-debug
 cmake ..
 cmake --build . --target test_ddm_one_level -j4
 cmake --build . --target benchmark_poisson_ddm1 -j4
 ```
+
 **Status:** ✅ Clean build, no warnings
 
 ### Test Execution
+
 ```bash
 # Serial test
 ctest -R test_ddm_one_level
@@ -136,15 +152,18 @@ ctest -R test_ddm_one_level
 # Parallel test (4 processes)
 mpirun -np 4 ./tests/test_ddm_one_level
 ```
+
 **Result:** ✅ All tests pass (21/21)
 
 ### Benchmark Execution
+
 ```bash
 cd cmake-build-debug/benchmark/poisson_scaling
 for np in 2 4 8; do
     mpirun -np $np ./benchmark_poisson_ddm1
 done
 ```
+
 **Result:** ✅ Successfully demonstrates poor scaling
 
 ## Code Quality Checklist
@@ -214,6 +233,6 @@ The benchmark results motivate **Phase 2.2: Two-Level DDM with AMG Coarse Solver
 
 ## References
 
-- MFEM Documentation: https://mfem.org/
+- MFEM Documentation: <https://mfem.org/>
 - "Domain Decomposition Methods in Science and Engineering" (Quarteroni & Valli, 1999)
 - DEVELOPMENT.prompt.md: Phase 2, Step 2.1 specification

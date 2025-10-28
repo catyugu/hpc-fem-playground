@@ -29,11 +29,13 @@ Created the **framework** for a two-level overlapping Schwarz preconditioner wit
 **Purpose:** Framework for two-level Schwarz method with coarse-grid correction
 
 **Mathematical Formula:**
-```
+
+$$
 M^{-1} = Ψ A_H^{-1} Ψ^T + ∑_{i=1}^{N} R_i^T A_i^{-1} R_i
-```
+$$
 
 Where:
+
 - First term: coarse-grid correction (global information propagation)
 - Second term: local subdomain solves (parallel local work)
 - Ψ: prolongation operator from coarse to fine grid
@@ -42,6 +44,7 @@ Where:
 **Implementation Status:**
 
 ✅ **Completed Components:**
+
 - Local subdomain matrix extraction
 - Local Gauss-Seidel solver setup
 - Coarse finite element space creation (polynomial order 1)
@@ -49,6 +52,7 @@ Where:
 - AMG solver for coarse problem
 
 ⚠️ **TODO Components (documented in code):**
+
 - Proper prolongation operator Ψ construction
 - Galerkin projection for accurate A_H
 - Restriction operation Ψ^T in `Mult()`
@@ -62,18 +66,21 @@ The class currently behaves like `OneLevelSchwarz` because the coarse-grid corre
 **Purpose:** Verify correctness of the two-level Schwarz framework
 
 **Problem Setup:** Same as `test_ddm_one_level.cpp`
+
 - 3D Poisson equation: -∇²u = f in [0,1]³
 - Manufactured solution: u(x,y,z) = sin(πx)sin(πy)sin(πz)
 - Mesh: 4³ hexahedral elements
 - FE space: H1, polynomial order 2
 
 **Test Criteria:**
+
 - ✅ CG solver converges
 - ✅ L2 error < 2e-3
 - ✅ No segmentation faults
 - ✅ Runs with 4 MPI processes
 
 **Results:**
+
 - CG iterations: 23 (same as one-level, as expected)
 - L2 error: 0.00167
 - Status: **PASSED**
@@ -83,6 +90,7 @@ The class currently behaves like `OneLevelSchwarz` because the coarse-grid corre
 **Purpose:** Demonstrate the framework (currently one-level behavior)
 
 **Documentation in Code:**
+
 ```cpp
 /*
  * NOTE: This benchmark demonstrates the framework for two-level Schwarz.
@@ -103,6 +111,7 @@ The class currently behaves like `OneLevelSchwarz` because the coarse-grid corre
 **Solution:** Don't delete the prolongation matrix in the destructor (it's managed by the FE space).
 
 **Code Fix:**
+
 ```cpp
 // Don't delete prolongation_ - it's owned by the FE space
 delete coarseSpace_;  // This also cleans up its matrices
@@ -111,6 +120,7 @@ delete coarseSpace_;  // This also cleans up its matrices
 ### Challenge 2: Restriction/Prolongation Complexity
 
 **Problem:** Properly implementing restriction Ψ^T and prolongation Ψ in MFEM requires:
+
 - Understanding MFEM's parallel DOF management
 - Handling true DOFs vs. local DOFs
 - Managing parallel communication in restriction/prolongation
@@ -126,44 +136,54 @@ delete coarseSpace_;  // This also cleans up its matrices
 ## Files Modified/Created
 
 ### New Implementation Files
+
 - ✅ `src/hpcfem/solver_two_level_schwarz.hpp` (125 lines)
 - ✅ `src/hpcfem/solver_two_level_schwarz.cpp` (119 lines with TODOs)
 
 ### New Test Files
+
 - ✅ `tests/test_ddm_two_level.cpp` (160 lines)
 
 ### New Benchmark Files
+
 - ✅ `benchmark/poisson_scaling/poisson_scaling_ddm2.cpp` (178 lines with status notes)
 
 ### Modified Build Files
+
 - ✅ `src/CMakeLists.txt` - Added solver_two_level_schwarz.cpp
 - ✅ `tests/CMakeLists.txt` - Added test_ddm_two_level target
 - ✅ `benchmark/poisson_scaling/CMakeLists.txt` - Added benchmark_poisson_ddm2
 
 ### Updated Documentation
+
 - ✅ `docs/hpcfem-doc/naming_registry.md` - Registered TwoLevelSchwarz
 - ✅ `docs/chore/phase2_2_two_level_ddm.md` - This file
 
 ## Build and Test Results
 
 ### Compilation
+
 ```bash
 cmake ..
 cmake --build . --target test_ddm_two_level -j4
 ```
+
 **Status:** ✅ Clean build, no warnings
 
 ### Test Execution
+
 ```bash
 ctest -R test_ddm_two_level
 ```
+
 **Result:** ✅ All 23/23 tests pass (100%)
 
 ### Test Summary
-```
+
+$$
 12/23 Test #189: test_ddm_two_level .....................   Passed    0.37 sec
 23/23 Test #200: test_ddm_two_level_parallel ............   Passed    0.49 sec
-```
+$$
 
 ## Code Quality Checklist
 
@@ -185,6 +205,7 @@ ctest -R test_ddm_two_level
 The following tasks are needed to complete the two-level method:
 
 ### 1. Prolongation Operator Construction
+
 ```cpp
 // TODO in constructor:
 // Build prolongation Ψ from coarse to fine space
@@ -193,6 +214,7 @@ prolongation_ = buildProlongationOperator(coarseSpace_, fineSpace_);
 ```
 
 ### 2. Galerkin Projection
+
 ```cpp
 // TODO: Replace direct assembly with Galerkin projection
 // A_H = Ψ^T * A * Ψ
@@ -204,6 +226,7 @@ delete restriction;
 ```
 
 ### 3. Restriction in Mult()
+
 ```cpp
 // TODO in Mult():
 // Restrict fine-grid vector to coarse grid
@@ -212,6 +235,7 @@ prolongation_->MultTranspose(x, coarseX_);
 ```
 
 ### 4. Prolongation in Mult()
+
 ```cpp
 // TODO in Mult():
 // Prolongate coarse-grid solution to fine grid
@@ -236,11 +260,13 @@ Once the coarse-grid correction is properly implemented, the two-level method sh
 ### Why Two-Level Methods Scale
 
 **One-Level Problem:**
+
 - Information propagates only through subdomain overlaps
 - As subdomains get smaller (more processes), information travels slower
 - Iteration count ~ O(1/H) where H is subdomain diameter
 
 **Two-Level Solution:**
+
 - Coarse grid provides global communication channel
 - Information propagates across entire domain in one coarse solve
 - Iteration count ~ O(1) (constant, independent of number of subdomains)
@@ -248,11 +274,13 @@ Once the coarse-grid correction is properly implemented, the two-level method sh
 ### Theory
 
 For the two-level additive Schwarz method:
-```
+
+$$$
 κ(M^{-1}A) ≤ C(1 + H/δ)
-```
+$$
 
 Where:
+
 - κ: condition number
 - H: subdomain diameter
 - δ: overlap size
@@ -274,6 +302,7 @@ This bound is **independent of the number of subdomains**, proving scalability.
 ## Next Steps
 
 ### Option A: Complete Two-Level Implementation
+
 1. Study MFEM's parallel interpolation operators
 2. Implement proper prolongation construction
 3. Implement Galerkin projection
@@ -281,6 +310,7 @@ This bound is **independent of the number of subdomains**, proving scalability.
 5. Run benchmarks and verify constant iteration count
 
 ### Option B: Proceed to Phase 3
+
 1. Accept current framework as placeholder
 2. Move to multiphysics solvers (Phase 3)
 3. Return to two-level implementation later
