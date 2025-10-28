@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
     const double k_thermal = 400.0; // Thermal conductivity [W/m/K]
     const double rho = 8960.0;      // Density [kg/m³]
     const double cp = 385.0;        // Specific heat [J/kg/K]
-    const double h_conv = 100.0;     // Convection coefficient [W/m²/K]
+    const double h_conv = 100.0;    // Convection coefficient [W/m²/K]
     const double T_amb = 293.15;    // Ambient temperature [K]
 
     // Applied voltage

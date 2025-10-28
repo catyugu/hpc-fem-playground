@@ -35,11 +35,5 @@ add_subdirectory(${MFEM_INCLUDE_DIR})
 
 # First, set up the plugin library (which needs to be available before HPC_FEM_PLAYGROUND_LIB)
 add_subdirectory(src)
-
-# Make a lib that links to MFEM and our plugins
-# The mfem target already provides all necessary include directories and compile definitions
-add_library(HPC_FEM_PLAYGROUND_LIB INTERFACE)
-target_link_libraries(HPC_FEM_PLAYGROUND_LIB INTERFACE mfem)
-
 add_subdirectory(example)
 add_subdirectory(benchmark)
