@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28 (Phase 1.2)
+**Last Updated:** 2025-10-28 (Phase 2.1)
 
 ## Namespaces
 
@@ -31,6 +31,10 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
   - **Backend:** HYPRE BoomerAMG
+
+- `OneLevelSchwarz` - One-level overlapping Schwarz preconditioner (src/hpcfem/solver_one_level_schwarz.hpp/cpp)
+  - **Extends:** `mfem::Solver`
+  - **Purpose:** Domain decomposition preconditioner (additive Schwarz)
 
 ### Orchestration
 
@@ -66,6 +70,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 ### Solver Modules
 - `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
 - `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
+- `src/hpcfem/solver_one_level_schwarz.hpp` - One-level Schwarz preconditioner header (Phase 2.1)
+- `src/hpcfem/solver_one_level_schwarz.cpp` - One-level Schwarz preconditioner implementation (Phase 2.1)
 
 ### Problem Orchestration
 - `src/hpcfem/fem_problem.hpp` - FEM problem orchestrator header
@@ -80,5 +86,10 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
 - `tests/test_physics_thermal.cpp` - Thermal physics test
 - `tests/test_physics_coupling.cpp` - Coupled physics test
+- `tests/test_ddm_one_level.cpp` - One-level Schwarz correctness test (Phase 2.1)
+
+### Benchmarks
+- `benchmark/poisson_scaling/main.cpp` - Original Poisson scaling benchmark
+- `benchmark/poisson_scaling/poisson_scaling_ddm1.cpp` - One-level Schwarz scaling benchmark (Phase 2.1)
 
 ---

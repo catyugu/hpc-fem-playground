@@ -3,6 +3,7 @@ add_library(hpcfem
     hpcfem/fem_problem.cpp
     hpcfem/physics_electrostatics.cpp
     hpcfem/solver_hypre_amg.cpp
+    hpcfem/solver_one_level_schwarz.cpp
 )
 
 # Set include directories - src is the root
