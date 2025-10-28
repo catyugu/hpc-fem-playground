@@ -27,3 +27,6 @@ applyTo: '**'
    - File/Folder: lowercase_with_underscores/Keep the same name as the main class inside
    - Test Case: test_case_description_with_underscores
 17. **Put .hpp files and .cpp files in the same location in the `src`**
+18. **Clean include path:** No use of relative path in include like `../`, instead, always configure the include path property in CMakeLists.txt
+19. **Correct Python configuration if needed:** Use the conda environment `hpc-fem-playground` for python use.
+20. **Proper problems setup:** All the problem setup in tests and examples should be aligned to pratical use (3D cases preferred, vector field preferred).
