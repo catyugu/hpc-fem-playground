@@ -41,6 +41,16 @@ target_include_directories(test_solver_hypre_amg PRIVATE ${CMAKE_SOURCE_DIR}/src
 target_link_libraries(test_solver_hypre_amg PRIVATE mfem)
 add_test(NAME test_solver_hypre_amg COMMAND test_solver_hypre_amg)
 
+# Test 8: Problem abstraction test (Phase 2, Step 2.3)
+add_executable(test_problem_abstraction 
+    test_problem_abstraction.cpp
+    ../src/hpcfem/solver_hypre_amg.cpp
+    ../src/hpcfem/physics_electrostatics.cpp
+    ../src/hpcfem/fem_problem.cpp)
+target_include_directories(test_problem_abstraction PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_problem_abstraction PRIVATE mfem)
+add_test(NAME test_problem_abstraction COMMAND test_problem_abstraction)
+
 # For parallel tests with MPI
 if(MFEM_USE_MPI)
     find_package(MPI REQUIRED)
@@ -62,4 +72,7 @@ if(MFEM_USE_MPI)
     add_test(NAME test_solver_hypre_amg_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_hypre_amg> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_problem_abstraction_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_problem_abstraction> ${MPIEXEC_POSTFLAGS})
 endif()
