@@ -68,6 +68,11 @@ add_executable(test_ddm_one_level test_ddm_one_level.cpp)
 target_link_libraries(test_ddm_one_level PRIVATE hpcfem gtest_main)
 add_test(NAME test_ddm_one_level COMMAND test_ddm_one_level)
 
+# Test 10: Two-level DDM test (Phase 2, Step 2.2)
+add_executable(test_ddm_two_level test_ddm_two_level.cpp)
+target_link_libraries(test_ddm_two_level PRIVATE hpcfem gtest_main)
+add_test(NAME test_ddm_two_level COMMAND test_ddm_two_level)
+
 # For parallel tests with MPI
 if(MFEM_USE_MPI)
     find_package(MPI REQUIRED)
@@ -101,4 +106,7 @@ if(MFEM_USE_MPI)
     add_test(NAME test_ddm_one_level_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_ddm_one_level> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_ddm_two_level_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_ddm_two_level> ${MPIEXEC_POSTFLAGS})
 endif()

@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28 (Phase 2.1)
+**Last Updated:** 2025-10-28 (Phase 2.2)
 
 ## Namespaces
 
@@ -35,6 +35,10 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `OneLevelSchwarz` - One-level overlapping Schwarz preconditioner (src/hpcfem/solver_one_level_schwarz.hpp/cpp)
   - **Extends:** `mfem::Solver`
   - **Purpose:** Domain decomposition preconditioner (additive Schwarz)
+
+- `TwoLevelSchwarz` - Two-level overlapping Schwarz preconditioner with AMG coarse solver (src/hpcfem/solver_two_level_schwarz.hpp/cpp)
+  - **Extends:** `mfem::Solver`
+  - **Purpose:** Framework for scalable two-level DD method (coarse correction TODO)
 
 ### Orchestration
 
@@ -72,6 +76,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
 - `src/hpcfem/solver_one_level_schwarz.hpp` - One-level Schwarz preconditioner header (Phase 2.1)
 - `src/hpcfem/solver_one_level_schwarz.cpp` - One-level Schwarz preconditioner implementation (Phase 2.1)
+- `src/hpcfem/solver_two_level_schwarz.hpp` - Two-level Schwarz preconditioner header (Phase 2.2)
+- `src/hpcfem/solver_two_level_schwarz.cpp` - Two-level Schwarz preconditioner implementation (Phase 2.2)
 
 ### Problem Orchestration
 - `src/hpcfem/fem_problem.hpp` - FEM problem orchestrator header
@@ -87,9 +93,11 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `tests/test_physics_thermal.cpp` - Thermal physics test
 - `tests/test_physics_coupling.cpp` - Coupled physics test
 - `tests/test_ddm_one_level.cpp` - One-level Schwarz correctness test (Phase 2.1)
+- `tests/test_ddm_two_level.cpp` - Two-level Schwarz correctness test (Phase 2.2)
 
 ### Benchmarks
 - `benchmark/poisson_scaling/main.cpp` - Original Poisson scaling benchmark
 - `benchmark/poisson_scaling/poisson_scaling_ddm1.cpp` - One-level Schwarz scaling benchmark (Phase 2.1)
+- `benchmark/poisson_scaling/poisson_scaling_ddm2.cpp` - Two-level Schwarz framework benchmark (Phase 2.2)
 
 ---
