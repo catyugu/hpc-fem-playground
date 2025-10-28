@@ -43,6 +43,16 @@ add_executable(test_solver_interface test_solver_interface.cpp)
 target_link_libraries(test_solver_interface PRIVATE hpcfem gtest_main)
 add_test(NAME test_solver_interface COMMAND test_solver_interface)
 
+# Test 6a: Solver interface mock test (Phase 1, Step 1.2)
+add_executable(test_solver_interface_mock test_solver_interface_mock.cpp)
+target_link_libraries(test_solver_interface_mock PRIVATE hpcfem gtest_main)
+add_test(NAME test_solver_interface_mock COMMAND test_solver_interface_mock)
+
+# Test 6b: Physics interface mock test (Phase 1, Step 1.2)
+add_executable(test_physics_interface_mock test_physics_interface_mock.cpp)
+target_link_libraries(test_physics_interface_mock PRIVATE hpcfem gtest_main)
+add_test(NAME test_physics_interface_mock COMMAND test_physics_interface_mock)
+
 # Test 7: HYPRE AMG Solver test (Phase 2, Step 2.2)
 add_executable(test_solver_hypre_amg test_solver_hypre_amg.cpp)
 target_link_libraries(test_solver_hypre_amg PRIVATE hpcfem gtest_main)
@@ -71,6 +81,12 @@ if(MFEM_USE_MPI)
     add_test(NAME test_solver_interface_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_interface> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_solver_interface_mock_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_interface_mock> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_physics_interface_mock_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_physics_interface_mock> ${MPIEXEC_POSTFLAGS})
     add_test(NAME test_solver_hypre_amg_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_hypre_amg> ${MPIEXEC_POSTFLAGS})

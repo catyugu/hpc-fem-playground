@@ -2,18 +2,48 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
+**Last Updated:** 2025-10-28 (Phase 1.2)
+
 ## Namespaces
 
 - `hpcfem` - Root namespace for all library code
 
-## Classes
+## Core Library Classes
 
-- `SolverInterface` - Abstract base class for linear solvers (src/hpcfem/solver_interface.hpp)
-- `HypreAmgSolver` - Concrete HYPRE AMG solver implementation (src/hpcfem/solver_hypre_amg.hpp/cpp)
-- `DdmSchwarzSolver` - Domain decomposition Schwarz solver (src/hpcfem/solver_ddm_schwarz.hpp/cpp)
+### Abstract Interfaces
+
 - `PhysicsInterface` - Abstract base class for physics modules (src/hpcfem/physics_interface.hpp)
-- `ElectrostaticsPhysics` - Concrete electrostatics physics implementation (src/hpcfem/physics_electrostatics.hpp/cpp)
+  - **Status:** Pure virtual ✓
+  - **Purpose:** Defines contract for physics assembly
+  - **Key Methods:** `assemble()`, `getFiniteElementSpace()`
+  
+- `SolverInterface` - Abstract base class for linear solvers (src/hpcfem/solver_interface.hpp)
+  - **Status:** Pure virtual ✓
+  - **Purpose:** Defines contract for linear system solvers
+  - **Key Methods:** `solve()`
+
+### Concrete Implementations
+
+- `ElectrostaticsPhysics` - Electrostatics physics (Poisson equation) (src/hpcfem/physics_electrostatics.hpp/cpp)
+  - **Implements:** `PhysicsInterface`
+  - **Equation:** ∇·(σ∇φ) = f
+  
+- `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
+  - **Implements:** `SolverInterface`
+  - **Backend:** HYPRE BoomerAMG
+
+### Orchestration
+
 - `FemProblem` - Top-level FEM problem orchestrator (src/hpcfem/fem_problem.hpp/cpp)
+  - **Purpose:** Coordinates mesh, physics, and solver
+  - **Key Methods:** `assemble()`, `solve()`, `getSolution()`
+
+## Test Classes (Not in Library)
+
+### Mock Implementations (tests/)
+
+- `MockSolver` - Mock implementation of `SolverInterface` for testing (test_solver_interface_mock.cpp)
+- `MockPhysics` - Mock implementation of `PhysicsInterface` for testing (test_physics_interface_mock.cpp)
 
 ## Structs
 
@@ -23,16 +53,32 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 (None yet)
 
-## Files
+## Files by Category
 
-- `src/hpcfem/solver_interface.hpp` - Abstract solver interface
-- `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
-- `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
+### Core Interfaces
 - `src/hpcfem/physics_interface.hpp` - Abstract physics interface
+- `src/hpcfem/solver_interface.hpp` - Abstract solver interface
+
+### Physics Modules
 - `src/hpcfem/physics_electrostatics.hpp` - Electrostatics physics header
 - `src/hpcfem/physics_electrostatics.cpp` - Electrostatics physics implementation
+
+### Solver Modules
+- `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
+- `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
+
+### Problem Orchestration
 - `src/hpcfem/fem_problem.hpp` - FEM problem orchestrator header
 - `src/hpcfem/fem_problem.cpp` - FEM problem orchestrator implementation
 
+### Tests
+- `tests/test_solver_interface.cpp` - Solver interface compilation test
+- `tests/test_solver_interface_mock.cpp` - Solver interface contract test (Phase 1.2)
+- `tests/test_physics_interface_mock.cpp` - Physics interface contract test (Phase 1.2)
+- `tests/test_solver_hypre_amg.cpp` - HYPRE AMG solver functional test
+- `tests/test_problem_abstraction.cpp` - End-to-end abstraction test
+- `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
+- `tests/test_physics_thermal.cpp` - Thermal physics test
+- `tests/test_physics_coupling.cpp` - Coupled physics test
+
 ---
-**Last Updated:** 2025-10-28
