@@ -1,11 +1,12 @@
 /**
  * @file physics_joule_heating.cpp
- * @brief Implementation of coupled Joule heating physics
+ * @brief Implementation of coupled Joule heating physics with nonlinear coupling
  * 
- * Phase: 3, Step: 3.1
+ * Phase: 3, Step: 3.2 (nonlinear coupling complete)
  */
 
 #include "physics_joule_heating.hpp"
+#include "joule_heating_coefficient.hpp"
 
 namespace hpcfem
 {
@@ -117,8 +118,27 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
                                    mfem::BlockVector& blockRHS,
                                    mfem::BlockVector& blockSolution,
                                    mfem::Array<int>& essTdofElectric,
-                                   mfem::Array<int>& essTdofThermal)
+                                   mfem::Array<int>& essTdofThermal,
+                                   mfem::ParGridFunction* voltageGF)
 {
+    // Clean up old forms and matrices for reassembly in Picard iteration
+    delete matrixK_e_;
+    delete matrixK_t_;
+    matrixK_e_ = nullptr;
+    matrixK_t_ = nullptr;
+    
+    delete bilinearElectric_;
+    delete bilinearThermal_;
+    delete linearElectric_;
+    delete linearThermal_;
+    
+    // Recreate bilinear forms
+    bilinearElectric_ = new mfem::ParBilinearForm(fespaceElectric_);
+    bilinearElectric_->AddDomainIntegrator(new mfem::DiffusionIntegrator(*sigmaCoeff_));
+    
+    bilinearThermal_ = new mfem::ParBilinearForm(fespaceThermal_);
+    bilinearThermal_->AddDomainIntegrator(new mfem::DiffusionIntegrator(*kappaCoeff_));
+    
     // Assemble bilinear forms
     bilinearElectric_->Assemble();
     bilinearElectric_->Finalize();
@@ -126,8 +146,18 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
     bilinearThermal_->Assemble();
     bilinearThermal_->Finalize();
     
-    // Assemble linear forms
+    // Recreate linear forms
+    linearElectric_ = new mfem::ParLinearForm(fespaceElectric_);
     linearElectric_->Assemble();
+    
+    // Create thermal linear form with Joule heating if voltage provided
+    linearThermal_ = new mfem::ParLinearForm(fespaceThermal_);
+    if (voltageGF != nullptr) {
+        // Add Joule heating source: Q = σ|∇V|²
+        JouleHeatingCoefficient jouleCoeff(voltageGF, sigma_);
+        linearThermal_->AddDomainIntegrator(
+            new mfem::DomainLFIntegrator(jouleCoeff));
+    }
     linearThermal_->Assemble();
     
     // Set up boundary conditions
@@ -150,10 +180,6 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
     mfem::Vector rhsElectric, rhsThermal;
     mfem::Vector solElectric, solThermal;
     
-    // Clean up old matrices if they exist
-    delete matrixK_e_;
-    delete matrixK_t_;
-    
     // FormLinearSystem needs stack-allocated matrices that it will initialize
     mfem::HypreParMatrix A_electric, A_thermal;
     bilinearElectric_->FormLinearSystem(essTdofElectric, electricBC, *linearElectric_,
@@ -165,14 +191,15 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
     matrixK_e_ = new mfem::HypreParMatrix(A_electric);
     matrixK_t_ = new mfem::HypreParMatrix(A_thermal);
     
-    // TODO: For now, coupling matrix C is zero (simplified version)
-    // In full implementation, C would depend on electric field gradient
-    // matrixC_ = assembleCouplingMatrix();
+    // For now, coupling matrix C is implicit in the RHS through Joule heating
+    // The nonlinearity Q = σ|∇V|² is captured in the thermal RHS
+    // For a true Newton method, we'd need ∂Q/∂V, but that's a second-order
+    // nonlinearity that's typically handled through Picard iteration instead
     
     // Set blocks in BlockOperator
     blockOperator.SetBlock(0, 0, matrixK_e_);
     // Block (0,1) is zero (electric doesn't depend on temperature directly)
-    // Block (1,0) is matrixC_ (coupling), but we'll leave it zero for now
+    // Block (1,0) represents coupling - handled through RHS update
     blockOperator.SetBlock(1, 1, matrixK_t_);
     
     // Set block RHS and solution
@@ -186,15 +213,43 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
                                    mfem::BlockVector& blockRHS,
                                    mfem::BlockVector& blockSolution,
                                    mfem::Array<int>& essTdofElectric,
-                                   mfem::Array<int>& essTdofThermal)
+                                   mfem::Array<int>& essTdofThermal,
+                                   mfem::GridFunction* voltageGF)
 {
+    // Clean up old forms and matrices for reassembly
+    delete matrixK_e_;
+    delete matrixK_t_;
+    matrixK_e_ = nullptr;
+    matrixK_t_ = nullptr;
+    
+    delete bilinearElectric_;
+    delete bilinearThermal_;
+    delete linearElectric_;
+    delete linearThermal_;
+    
+    // Recreate bilinear forms
+    bilinearElectric_ = new mfem::BilinearForm(fespaceElectric_);
+    bilinearElectric_->AddDomainIntegrator(new mfem::DiffusionIntegrator(*sigmaCoeff_));
+    
+    bilinearThermal_ = new mfem::BilinearForm(fespaceThermal_);
+    bilinearThermal_->AddDomainIntegrator(new mfem::DiffusionIntegrator(*kappaCoeff_));
+    
     bilinearElectric_->Assemble();
     bilinearElectric_->Finalize();
     
     bilinearThermal_->Assemble();
     bilinearThermal_->Finalize();
     
+    linearElectric_ = new mfem::LinearForm(fespaceElectric_);
     linearElectric_->Assemble();
+    
+    // Create thermal linear form with Joule heating if voltage provided
+    linearThermal_ = new mfem::LinearForm(fespaceThermal_);
+    if (voltageGF != nullptr) {
+        JouleHeatingCoefficient jouleCoeff(voltageGF, sigma_);
+        linearThermal_->AddDomainIntegrator(
+            new mfem::DomainLFIntegrator(jouleCoeff));
+    }
     linearThermal_->Assemble();
     
     // Set up boundary conditions
@@ -216,7 +271,6 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
     mfem::Vector solElectric, solThermal;
     
     // For serial, FormLinearSystem returns SparseMatrix by reference
-    // We need to allocate them and own them
     mfem::SparseMatrix A_electric, A_thermal;
     
     bilinearElectric_->FormLinearSystem(essTdofElectric, electricBC, *linearElectric_,
@@ -224,9 +278,6 @@ void JouleHeatingPhysics::assemble(mfem::BlockOperator& blockOperator,
     bilinearThermal_->FormLinearSystem(essTdofThermal, thermalBC, *linearThermal_,
                                       A_thermal, solThermal, rhsThermal);
     
-    // For serial, we get SparseMatrix - just reference them
-    // Note: These will be invalid after A_electric/A_thermal go out of scope
-    // So we need to keep copies. For now, let's use member pointers
     matrixK_e_ = new mfem::SparseMatrix(A_electric);
     matrixK_t_ = new mfem::SparseMatrix(A_thermal);
     

@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28 (Phase 3.1 - Complete)
+**Last Updated:** 2025-10-28 (Phase 3.2 - Complete)
 
 ## Namespaces
 
@@ -36,20 +36,26 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `JouleHeatingPhysics` - Coupled electro-thermal Joule heating physics (src/hpcfem/physics_joule_heating.hpp/cpp)
   - **Does NOT implement:** `PhysicsInterface` (uses BlockOperator, specialized interface)
   - **Equation:** 2×2 block system `[K_e 0; C K_t][V; T] = [f_e; f_t]`
-  - **Phase:** 3.1
-  - **Key Feature:** First multiphysics implementation using MFEM BlockOperator/BlockVector
+  - **Phase:** 3.1, 3.2 (nonlinear coupling added)
+  - **Key Feature:** Multiphysics with nonlinear Joule heating Q = σ|∇V|²
+  - **Nonlinearity:** Solved via Picard iteration with voltage-dependent thermal source
+  
+- `JouleHeatingCoefficient` - Joule heating source term coefficient (src/hpcfem/joule_heating_coefficient.hpp)
+  - **Extends:** `mfem::Coefficient`
+  - **Formula:** Q = σ|∇V|²
+  - **Phase:** 3.2
+  - **Purpose:** Evaluates nonlinear Joule heating power density at quadrature points
+  
+- `BlockGaussSeidelSolver` - Physics-informed block Gauss-Seidel preconditioner (src/hpcfem/solver_block_gauss_seidel.hpp/cpp)
+  - **Extends:** `mfem::Solver`
+  - **Phase:** 3.2
+  - **Algorithm:** Block-triangular forward substitution exploiting one-way coupling
+  - **Status:** Implemented, requires explicit coupling matrix C in block (1,0)
   
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
   - **Backend:** HYPRE BoomerAMG
 
-- `OneLevelSchwarz` - One-level overlapping Schwarz preconditioner (src/hpcfem/solver_one_level_schwarz.hpp/cpp)
-  - **Extends:** `mfem::Solver`
-  - **Purpose:** Domain decomposition preconditioner (additive Schwarz)
-
-- `TwoLevelSchwarz` - Two-level overlapping Schwarz preconditioner with AMG coarse solver (src/hpcfem/solver_two_level_schwarz.hpp/cpp)
-  - **Extends:** `mfem::Solver`
-  - **Purpose:** Framework for scalable two-level DD method (coarse correction TODO)
 
 ### Orchestration
 
@@ -92,10 +98,12 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 - `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
 - `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
-- `src/hpcfem/solver_one_level_schwarz.hpp` - One-level Schwarz preconditioner header (Phase 2.1)
-- `src/hpcfem/solver_one_level_schwarz.cpp` - One-level Schwarz preconditioner implementation (Phase 2.1)
-- `src/hpcfem/solver_two_level_schwarz.hpp` - Two-level Schwarz preconditioner header (Phase 2.2)
-- `src/hpcfem/solver_two_level_schwarz.cpp` - Two-level Schwarz preconditioner implementation (Phase 2.2)
+- `src/hpcfem/solver_block_gauss_seidel.hpp` - Block Gauss-Seidel preconditioner header (Phase 3.2)
+- `src/hpcfem/solver_block_gauss_seidel.cpp` - Block Gauss-Seidel preconditioner implementation (Phase 3.2)
+
+### Helper/Coefficient Classes
+
+- `src/hpcfem/joule_heating_coefficient.hpp` - Joule heating coefficient Q = σ|∇V|² (Phase 3.2)
 
 ### Problem Orchestration
 
@@ -112,13 +120,21 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
 - `tests/test_physics_coupling.cpp` - Coupled physics test
 - `tests/test_physics_joule_heating_block.cpp` - Joule heating BlockOperator assembly test (Phase 3.1)
-- `tests/test_ddm_one_level.cpp` - One-level Schwarz correctness test (Phase 2.1)
-- `tests/test_ddm_two_level.cpp` - Two-level Schwarz correctness test (Phase 2.2)
+- `tests/test_solver_block_gauss_seidel.cpp` - Block Gauss-Seidel preconditioner test (Phase 3.2)
+
+### Examples
+
+- `example/ex0_cylinder_dirichlet.cpp` - Simple cylinder electrostatics
+- `example/ex1_cube_mixed_bc.cpp` - Cube with mixed boundary conditions
+- `example/ex2_rect_waveguide.cpp` - Rectangular waveguide
+- `example/ex3_transient_heat.cpp` - Transient heat diffusion
+- `example/ex4_eigenvalue_laplacian.cpp` - Eigenvalue problem
+- `example/ex5_coupled_problem.cpp` - Coupled electro-thermal problem
+- `example/ex6_nonlinear_joule_heating.cpp` - Nonlinear Joule heating with Q = σ|∇V|² (Phase 3.2)
 
 ### Benchmarks
 
-- `benchmark/poisson_scaling/main.cpp` - Original Poisson scaling benchmark
-- `benchmark/poisson_scaling/poisson_scaling_ddm1.cpp` - One-level Schwarz scaling benchmark (Phase 2.1)
-- `benchmark/poisson_scaling/poisson_scaling_ddm2.cpp` - Two-level Schwarz framework benchmark (Phase 2.2)
+- `benchmark/poisson_scaling/main.cpp` - Poisson scaling benchmark
+- `benchmark/joule_heating_solvers/main.cpp` - Joule heating solver comparison (Phase 3.2)
 
 ---

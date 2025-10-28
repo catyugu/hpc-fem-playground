@@ -5,8 +5,7 @@ add_library(hpcfem
     hpcfem/physics_thermal.cpp
     hpcfem/physics_joule_heating.cpp
     hpcfem/solver_hypre_amg.cpp
-    hpcfem/solver_one_level_schwarz.cpp
-    hpcfem/solver_two_level_schwarz.cpp
+    hpcfem/solver_block_gauss_seidel.cpp
 )
 
 # Set include directories - src is the root

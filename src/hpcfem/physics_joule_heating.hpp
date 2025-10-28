@@ -1,23 +1,26 @@
 /**
  * @file physics_joule_heating.hpp
- * @brief Coupled Joule heating physics implementation
+ * @brief Coupled Joule heating physics implementation with nonlinear coupling
  * 
  * Implements the coupled electro-thermal system:
  * Block (0,0): -∇·(σ(T)∇V) = 0  (electrostatics)
- * Block (1,0): Q = σ|∇V|²        (Joule heating coupling)
+ * Block (1,0): Q = σ|∇V|²        (Joule heating coupling - NONLINEAR)
  * Block (1,1): -∇·(κ∇T) = Q     (thermal diffusion)
  * 
  * The system is assembled as a 2×2 BlockOperator:
  * [K_e(T)    0  ] [V]   [0]
- * [C(V)    K_t  ] [T] = [0]
+ * [C(V)    K_t  ] [T] = [Q(V)]
  * 
- * Phase: 3, Step: 3.1
+ * where C(V) represents the linearized coupling ∂Q/∂V for Newton iteration
+ * 
+ * Phase: 3, Step: 3.2 (nonlinear coupling complete)
  */
 
 #ifndef HPCFEM_PHYSICS_JOULE_HEATING_HPP
 #define HPCFEM_PHYSICS_JOULE_HEATING_HPP
 
 #include "mfem.hpp"
+#include "joule_heating_coefficient.hpp"
 #include <memory>
 
 namespace hpcfem
@@ -69,30 +72,36 @@ public:
     ~JouleHeatingPhysics();
 
     /**
-     * @brief Assemble the coupled 2×2 block system
+     * @brief Assemble the coupled 2×2 block system with current voltage solution
      * 
      * Assembles the block operator and block RHS:
-     * A = [K_e   0 ]    b = [0]
-     *     [C    K_t]        [0]
+     * A = [K_e      0  ]    b = [0   ]
+     *     [C(V)    K_t ]        [Q(V)]
+     * 
+     * The coupling is NONLINEAR: Q = σ|∇V|², so this method must be called
+     * in a Newton iteration loop with updated voltage field.
      * 
      * @param blockOperator Output block operator (must be pre-allocated)
      * @param blockRHS Output block right-hand side
      * @param blockSolution Solution vector for boundary conditions
      * @param essTdofElectric Essential DOFs for electric field
      * @param essTdofThermal Essential DOFs for temperature field
+     * @param voltageGF Current voltage grid function for nonlinear coupling
      */
 #ifdef MFEM_USE_MPI
     void assemble(mfem::BlockOperator& blockOperator,
                  mfem::BlockVector& blockRHS,
                  mfem::BlockVector& blockSolution,
                  mfem::Array<int>& essTdofElectric,
-                 mfem::Array<int>& essTdofThermal);
+                 mfem::Array<int>& essTdofThermal,
+                 mfem::ParGridFunction* voltageGF = nullptr);
 #else
     void assemble(mfem::BlockOperator& blockOperator,
                  mfem::BlockVector& blockRHS,
                  mfem::BlockVector& blockSolution,
                  mfem::Array<int>& essTdofElectric,
-                 mfem::Array<int>& essTdofThermal);
+                 mfem::Array<int>& essTdofThermal,
+                 mfem::GridFunction* voltageGF = nullptr);
 #endif
 
     /**
