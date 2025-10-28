@@ -28,8 +28,6 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `src/hpcfem/solver_interface.hpp` - Abstract solver interface
 - `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
 - `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
-- `src/hpcfem/solver_ddm_schwarz.hpp` - DDM Schwarz solver header
-- `src/hpcfem/solver_ddm_schwarz.cpp` - DDM Schwarz solver implementation
 - `src/hpcfem/physics_interface.hpp` - Abstract physics interface
 - `src/hpcfem/physics_electrostatics.hpp` - Electrostatics physics header
 - `src/hpcfem/physics_electrostatics.cpp` - Electrostatics physics implementation
