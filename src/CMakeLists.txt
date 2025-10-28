@@ -1,2 +1,0 @@
-add_library(HPC_FEM_PLAYGROUND_LIB INTERFACE)
-target_link_libraries(HPC_FEM_PLAYGROUND_LIB INTERFACE mfem)
