@@ -3,7 +3,6 @@
 # Source files from hpcfem
 set(HPCFEM_SOURCES
     ${CMAKE_SOURCE_DIR}/src/hpcfem/solver_hypre_amg.cpp
-    ${CMAKE_SOURCE_DIR}/src/hpcfem/solver_ddm_schwarz.cpp
     ${CMAKE_SOURCE_DIR}/src/hpcfem/physics_electrostatics.cpp
     ${CMAKE_SOURCE_DIR}/src/hpcfem/fem_problem.cpp
 )

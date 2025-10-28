@@ -2,19 +2,17 @@
  * @file main.cpp
  * @brief Benchmark application for Poisson solver scaling studies
  * 
- * This benchmark measures performance of different solver configurations:
- * - HypreAmgSolver (monolithic AMG)
- * - DdmSchwarzSolver (domain decomposition)
+ * This benchmark measures performance of AMG solver:
+ * - HypreAmgSolver (algebraic multigrid)
  * 
  * Usage:
  *   ./benchmark_poisson --solver amg --mesh-size 32 --order 2
- *   mpirun -np 4 ./benchmark_poisson --solver ddm --mesh-size 64
+ *   mpirun -np 4 ./benchmark_poisson --solver amg --mesh-size 64
  */
 
 #include "hpcfem/fem_problem.hpp"
 #include "hpcfem/physics_electrostatics.hpp"
 #include "hpcfem/solver_hypre_amg.hpp"
-#include "hpcfem/solver_ddm_schwarz.hpp"
 #include "mfem.hpp"
 #include <iostream>
 #include <cmath>
@@ -60,13 +58,13 @@ void printUsage(const char* progName)
 {
     std::cout << "Usage: " << progName << " [OPTIONS]\n"
               << "\nOptions:\n"
-              << "  --solver TYPE      Solver type: 'amg' or 'ddm' (default: amg)\n"
+              << "  --solver TYPE      Solver type: 'amg' (default: amg)\n"
               << "  --mesh-size N      Mesh elements per dimension (default: 16)\n"
               << "  --order N          Polynomial order (default: 2)\n"
               << "  --help             Print this help message\n"
               << "\nExample:\n"
-              << "  " << progName << " --solver ddm --mesh-size 32 --order 3\n"
-              << "  mpirun -np 4 " << progName << " --solver ddm --mesh-size 64\n";
+              << "  " << progName << " --solver amg --mesh-size 32 --order 3\n"
+              << "  mpirun -np 4 " << progName << " --solver amg --mesh-size 64\n";
 }
 
 bool parseArgs(int argc, char* argv[], BenchmarkConfig& config)
@@ -98,10 +96,9 @@ bool parseArgs(int argc, char* argv[], BenchmarkConfig& config)
     }
     
     // Validate solver type
-    if (std::strcmp(config.solverType, "amg") != 0 && 
-        std::strcmp(config.solverType, "ddm") != 0)
+    if (std::strcmp(config.solverType, "amg") != 0)
     {
-        std::cerr << "Error: solver must be 'amg' or 'ddm'" << std::endl;
+        std::cerr << "Error: solver must be 'amg'" << std::endl;
         return false;
     }
     
@@ -200,32 +197,12 @@ int main(int argc, char *argv[])
     // Create solver based on configuration
     SolverInterface* solver = nullptr;
     HypreAmgSolver* amgSolver = nullptr;
-    DdmSchwarzSolver* ddmSolver = nullptr;
     
-    if (std::strcmp(config.solverType, "amg") == 0)
+    amgSolver = new HypreAmgSolver(1e-12, 2000, 0);
+    solver = amgSolver;
+    if (myid == 0)
     {
-        amgSolver = new HypreAmgSolver(1e-12, 2000, 0);
-        solver = amgSolver;
-        if (myid == 0)
-        {
-            std::cout << "Using AMG solver" << std::endl;
-        }
-    }
-    else // ddm
-    {
-        // Use optimized parameters: same tolerance as AMG, optimized omega
-        constexpr double DDM_REL_TOL = 1e-12;
-        constexpr int DDM_MAX_ITER = 200;
-        constexpr int DDM_PRINT_LEVEL = 0;
-        constexpr double DDM_OMEGA = 1.0;  // Standard Richardson
-        
-        ddmSolver = new DdmSchwarzSolver(DDM_REL_TOL, DDM_MAX_ITER, 
-                                         DDM_PRINT_LEVEL, DDM_OMEGA);
-        solver = ddmSolver;
-        if (myid == 0)
-        {
-            std::cout << "Using DDM solver" << std::endl;
-        }
+        std::cout << "Using AMG solver" << std::endl;
     }
 
     // Create problem
@@ -244,15 +221,7 @@ int main(int argc, char *argv[])
     double solveTime = std::chrono::duration<double>(solveEnd - solveStart).count();
 
     // Get iteration count
-    int iterations = 0;
-    if (amgSolver)
-    {
-        iterations = amgSolver->getNumIterations();
-    }
-    else if (ddmSolver)
-    {
-        iterations = ddmSolver->getNumIterations();
-    }
+    int iterations = amgSolver->getNumIterations();
 
     // Compute error
     auto* solutionGf = problem.getSolutionGridFunction();
