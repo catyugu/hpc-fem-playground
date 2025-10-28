@@ -16,8 +16,10 @@ target_link_libraries(benchmark_poisson PRIVATE mfem)
 # Set C++17 standard
 target_compile_features(benchmark_poisson PRIVATE cxx_std_17)
 
-# Include directories
-target_include_directories(benchmark_poisson PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# Include directories - no relative paths
+target_include_directories(benchmark_poisson PRIVATE 
+    ${CMAKE_SOURCE_DIR}/src
+)
 
 # MPI support
 if(MFEM_USE_MPI)

@@ -11,10 +11,10 @@
  *   mpirun -np 4 ./benchmark_poisson --solver ddm --mesh-size 64
  */
 
-#include "../../src/hpcfem/fem_problem.hpp"
-#include "../../src/hpcfem/physics_electrostatics.hpp"
-#include "../../src/hpcfem/solver_hypre_amg.hpp"
-#include "../../src/hpcfem/solver_ddm_schwarz.hpp"
+#include "hpcfem/fem_problem.hpp"
+#include "hpcfem/physics_electrostatics.hpp"
+#include "hpcfem/solver_hypre_amg.hpp"
+#include "hpcfem/solver_ddm_schwarz.hpp"
 #include "mfem.hpp"
 #include <iostream>
 #include <cmath>
@@ -213,7 +213,14 @@ int main(int argc, char *argv[])
     }
     else // ddm
     {
-        ddmSolver = new DdmSchwarzSolver(1e-6, 100, 0);
+        // Use optimized parameters: same tolerance as AMG, optimized omega
+        constexpr double DDM_REL_TOL = 1e-12;
+        constexpr int DDM_MAX_ITER = 200;
+        constexpr int DDM_PRINT_LEVEL = 0;
+        constexpr double DDM_OMEGA = 1.0;  // Standard Richardson
+        
+        ddmSolver = new DdmSchwarzSolver(DDM_REL_TOL, DDM_MAX_ITER, 
+                                         DDM_PRINT_LEVEL, DDM_OMEGA);
         solver = ddmSolver;
         if (myid == 0)
         {

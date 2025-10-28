@@ -21,6 +21,8 @@ DdmSchwarzSolver::DdmSchwarzSolver(double relTol,
       numIterations_(0),
       finalNorm_(0.0)
 {
+    // Note: Optimal omega for Richardson iteration is typically 0.5-0.7
+    // omega = 1.0 can be too aggressive and cause slow convergence
 }
 
 DdmSchwarzSolver::~DdmSchwarzSolver()
@@ -36,8 +38,10 @@ void DdmSchwarzSolver::solve(const mfem::HypreParMatrix& A,
     MPI_Comm_rank(A.GetComm(), &myid);
     
     // Setup local subdomain solver (AMG preconditioner)
+    // CRITICAL: Build the AMG hierarchy ONCE, not every iteration!
     mfem::HypreBoomerAMG localSolver;
     localSolver.SetPrintLevel(0);
+    localSolver.SetOperator(A);  // Build AMG hierarchy once here
     
     // Create temporary vectors
     mfem::Vector r(b.Size());  // residual
@@ -62,8 +66,7 @@ void DdmSchwarzSolver::solve(const mfem::HypreParMatrix& A,
     for (int iter = 0; iter < maxIter_; ++iter)
     {
         // Apply local subdomain solver: z = M^{-1} * r
-        // where M is the local block diagonal preconditioner
-        localSolver.SetOperator(A);
+        // The AMG hierarchy is already built, just apply it
         z = 0.0;
         localSolver.Mult(r, z);
         
@@ -114,7 +117,8 @@ void DdmSchwarzSolver::solve(const mfem::SparseMatrix& A,
                              const mfem::Vector& b,
                              mfem::Vector& x)
 {
-    // Serial version: fall back to direct AMG solver
+    // Serial version: Use GS smoother as local solver
+    // Build the smoother once, not every iteration
     mfem::GSSmoother localSolver(A);
     
     mfem::Vector r(b.Size());
@@ -137,6 +141,7 @@ void DdmSchwarzSolver::solve(const mfem::SparseMatrix& A,
     // Richardson iteration
     for (int iter = 0; iter < maxIter_; ++iter)
     {
+        // Apply smoother (already initialized)
         z = 0.0;
         localSolver.Mult(r, z);
         
