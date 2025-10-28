@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28 (Phase 3.1 - In Progress)
+**Last Updated:** 2025-10-28 (Phase 3.1 - Complete)
 
 ## Namespaces
 
@@ -32,6 +32,12 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
   - **Implements:** `PhysicsInterface`
   - **Equation:** ∇·(κ∇T) = Q
   - **Phase:** 3.1
+
+- `JouleHeatingPhysics` - Coupled electro-thermal Joule heating physics (src/hpcfem/physics_joule_heating.hpp/cpp)
+  - **Does NOT implement:** `PhysicsInterface` (uses BlockOperator, specialized interface)
+  - **Equation:** 2×2 block system `[K_e 0; C K_t][V; T] = [f_e; f_t]`
+  - **Phase:** 3.1
+  - **Key Feature:** First multiphysics implementation using MFEM BlockOperator/BlockVector
   
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
@@ -79,6 +85,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `src/hpcfem/physics_electrostatics.cpp` - Electrostatics physics implementation
 - `src/hpcfem/physics_thermal.hpp` - Thermal diffusion physics header (Phase 3.1)
 - `src/hpcfem/physics_thermal.cpp` - Thermal diffusion physics implementation (Phase 3.1)
+- `src/hpcfem/physics_joule_heating.hpp` - Joule heating coupled physics header (Phase 3.1)
+- `src/hpcfem/physics_joule_heating.cpp` - Joule heating coupled physics implementation (Phase 3.1)
 
 ### Solver Modules
 
@@ -102,8 +110,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `tests/test_solver_hypre_amg.cpp` - HYPRE AMG solver functional test
 - `tests/test_problem_abstraction.cpp` - End-to-end abstraction test
 - `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
-- `tests/test_physics_thermal.cpp` - Thermal physics test
 - `tests/test_physics_coupling.cpp` - Coupled physics test
+- `tests/test_physics_joule_heating_block.cpp` - Joule heating BlockOperator assembly test (Phase 3.1)
 - `tests/test_ddm_one_level.cpp` - One-level Schwarz correctness test (Phase 2.1)
 - `tests/test_ddm_two_level.cpp` - Two-level Schwarz correctness test (Phase 2.2)
 
