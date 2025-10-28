@@ -33,6 +33,14 @@ add_executable(test_solver_interface test_solver_interface.cpp)
 target_link_libraries(test_solver_interface PRIVATE mfem)
 add_test(NAME test_solver_interface COMMAND test_solver_interface)
 
+# Test 7: HYPRE AMG Solver test (Phase 2, Step 2.2)
+add_executable(test_solver_hypre_amg 
+    test_solver_hypre_amg.cpp
+    ../src/hpcfem/solver_hypre_amg.cpp)
+target_include_directories(test_solver_hypre_amg PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_solver_hypre_amg PRIVATE mfem)
+add_test(NAME test_solver_hypre_amg COMMAND test_solver_hypre_amg)
+
 # For parallel tests with MPI
 if(MFEM_USE_MPI)
     find_package(MPI REQUIRED)
@@ -51,4 +59,7 @@ if(MFEM_USE_MPI)
     add_test(NAME test_solver_interface_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_interface> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_solver_hypre_amg_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_solver_hypre_amg> ${MPIEXEC_POSTFLAGS})
 endif()

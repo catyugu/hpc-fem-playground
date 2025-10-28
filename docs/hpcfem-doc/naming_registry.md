@@ -8,7 +8,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 ## Classes
 
-- `SolverInterface` - Abstract base class for linear solvers (include/hpcfem/solver_interface.hpp)
+- `SolverInterface` - Abstract base class for linear solvers (src/hpcfem/solver_interface.hpp)
+- `HypreAmgSolver` - Concrete HYPRE AMG solver implementation (src/hpcfem/solver_hypre_amg.hpp/cpp)
 
 ## Structs
 
@@ -21,6 +22,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 ## Files
 
 - `src/hpcfem/solver_interface.hpp` - Abstract solver interface
+- `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
+- `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
 
 ---
 **Last Updated:** 2025-10-28
