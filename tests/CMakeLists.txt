@@ -23,6 +23,11 @@ add_executable(test_physics_thermal test_physics_thermal.cpp)
 target_link_libraries(test_physics_thermal PRIVATE mfem)
 add_test(NAME test_physics_thermal COMMAND test_physics_thermal)
 
+# Test 5: One-way coupled Joule heating (Phase 1, Step 1.3)
+add_executable(test_physics_coupling test_physics_coupling.cpp)
+target_link_libraries(test_physics_coupling PRIVATE mfem)
+add_test(NAME test_physics_coupling COMMAND test_physics_coupling)
+
 # For parallel tests with MPI
 if(MFEM_USE_MPI)
     find_package(MPI REQUIRED)
@@ -35,4 +40,7 @@ if(MFEM_USE_MPI)
     add_test(NAME test_physics_thermal_parallel 
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
              ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_physics_thermal> ${MPIEXEC_POSTFLAGS})
+    add_test(NAME test_physics_coupling_parallel 
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
+             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:test_physics_coupling> ${MPIEXEC_POSTFLAGS})
 endif()
