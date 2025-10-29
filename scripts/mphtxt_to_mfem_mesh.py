@@ -9,7 +9,7 @@ Usage:
 This supports the subset of the mphtxt structure used in the workspace test
 files (e.g. `testdata/testmesh1.mphtxt`). It re-uses the conservative
 parsing strategy from `mphtxt_to_gmsh.py` to extract the global node list
-and element blocks. For this first-phase converter we write a linear
+and element blocks.
 MFEM v1.0 mesh (no "nodes FiniteElementSpace" section) preserving
 element attributes when available.
 

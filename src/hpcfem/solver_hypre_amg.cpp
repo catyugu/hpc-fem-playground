@@ -2,7 +2,7 @@
  * @file solver_hypre_amg.cpp
  * @brief Implementation of HYPRE BoomerAMG solver
  * 
- * Phase: 2, Step: 2.2
+
  */
 
 #include "solver_hypre_amg.hpp"

@@ -2,7 +2,7 @@
  * @file test_problem_abstraction.cpp
  * @brief Test for the complete problem abstraction layer
  * 
- * Phase: 2, Step: 2.3
+
  * 
  * This test validates the end-to-end workflow using:
  * - PhysicsInterface / ElectrostaticsPhysics
@@ -10,9 +10,9 @@
  * - FemProblem orchestrator
  */
 
-#include "../src/hpcfem/physics_electrostatics.hpp"
-#include "../src/hpcfem/solver_hypre_amg.hpp"
-#include "../src/hpcfem/fem_problem.hpp"
+#include "hpcfem/physics_electrostatics.hpp"
+#include "hpcfem/solver_hypre_amg.hpp"
+#include "hpcfem/fem_problem.hpp"
 #include "mfem.hpp"
 #include <iostream>
 #include <cmath>

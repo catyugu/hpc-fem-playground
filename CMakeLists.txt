@@ -1,16 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
-project(HPC_FEM_PLAYGROUND CXX)
+project(HPC_FEM_PLAYGROUND VERSION 0.1.0 LANGUAGES CXX)
+
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Include CPM for dependency management
+include(cmake/CPM.cmake)
 
 # By Default, enable MFEM use of MPI
 set(MFEM_USE_MPI ON CACHE BOOL "Enable MPI support in MFEM" FORCE)
 if (MFEM_USE_MPI)
     message(STATUS "Configuring MFEM with MPI support")
+    find_package(MPI REQUIRED)
     set(MFEM_USE_METIS_5 ON)
     set(MFEM_USE_HYPRE ON)
     set(HYPRE_INCLUDE_DIRS /usr/include/hypre)
     set(HYPRE_LIBRARIES /usr/lib/x86_64-linux-gnu/libHYPRE.so)
 endif()
-
 
 if(NOT DEFINED THIRD_PARTY_DIR)
     set(THIRD_PARTY_DIR ${PROJECT_SOURCE_DIR}/share CACHE PATH "Path to store third-party sources")
@@ -33,11 +41,8 @@ endif()
 
 add_subdirectory(${MFEM_INCLUDE_DIR})
 
-# First, set up the plugin library (which needs to be available before HPC_FEM_PLAYGROUND_LIB)
+# Build the hpcfem library
 add_subdirectory(src)
-
-add_library(HPC_FEM_PLAYGROUND_LIB INTERFACE)
-target_link_libraries(HPC_FEM_PLAYGROUND_LIB INTERFACE mfem)
 
 # Enable testing
 enable_testing()

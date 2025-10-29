@@ -2,7 +2,7 @@
  * @file test_physics_coupling.cpp
  * @brief Test for one-way coupled Joule heating simulation
  * 
- * Phase: 1, Step: 1.3
+
  * 
  * COUPLING:
  * 1. Solve electrostatics: -∇·(σ∇φ) = 0

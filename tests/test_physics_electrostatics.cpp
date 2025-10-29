@@ -2,7 +2,7 @@
  * @file test_physics_electrostatics.cpp
  * @brief Test for standalone electrostatics solver using Method of Manufactured Solutions
  * 
- * Phase: 1, Step: 1.1
+
  * 
  * Problem: -∇·(σ∇u) = f in Ω = [0,1]²
  *          u = u_exact on ∂Ω

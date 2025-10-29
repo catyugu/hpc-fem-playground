@@ -2,13 +2,13 @@
  * @file test_solver_hypre_amg.cpp
  * @brief Test for HypreAmgSolver using the Poisson MMS problem
  * 
- * Phase: 2, Step: 2.2
+
  * 
  * This test verifies that the HypreAmgSolver wrapper correctly solves
  * the Poisson problem using the SolverInterface abstraction.
  */
 
-#include "../src/hpcfem/solver_hypre_amg.hpp"
+#include "hpcfem/solver_hypre_amg.hpp"
 #include "mfem.hpp"
 #include <iostream>
 #include <cmath>
