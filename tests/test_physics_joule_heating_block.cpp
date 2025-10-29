@@ -17,7 +17,7 @@
  * 3. System can be solved with direct solver
  */
 
-#include "hpcfem/physics_joule_heating.hpp"
+#include "hpcfem/physics/physics_joule_heating.hpp"
 #include <gtest/gtest.h>
 #include <mfem.hpp>
 

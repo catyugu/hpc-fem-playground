@@ -10,7 +10,7 @@
  * - Interface polymorphism works correctly
  */
 
-#include "hpcfem/solver_interface.hpp"
+#include "hpcfem/core/solver_interface.hpp"
 #include <gtest/gtest.h>
 
 using namespace hpcfem;

@@ -1,9 +1,9 @@
 /**
- * @file physics_electrostatics.cpp
+ * @file physics/physics_electrostatics.cpp
  * @brief Implementation of electrostatics physics
  */
 
-#include "physics_electrostatics.hpp"
+#include "hpcfem/physics/physics_electrostatics.hpp"
 
 namespace hpcfem
 {
@@ -67,16 +67,13 @@ void ElectrostaticsPhysics::assemble(mfem::HypreParMatrix& A,
     bilinearForm_->Assemble();
     linearForm_->Assemble();
     
-    // Apply boundary conditions
     mfem::ParGridFunction boundaryFunc(fespace_);
     boundaryFunc.ProjectCoefficient(*boundaryCoeff_);
     
-    // Get essential boundary DOFs (all boundaries)
     mfem::Array<int> essBdr(fespace_->GetParMesh()->bdr_attributes.Max());
     essBdr = 1;
     fespace_->GetEssentialTrueDofs(essBdr, essTdofList);
     
-    // Form linear system
     bilinearForm_->FormLinearSystem(essTdofList, boundaryFunc, *linearForm_, A, x, b);
 }
 
@@ -93,16 +90,13 @@ void ElectrostaticsPhysics::assemble(mfem::SparseMatrix& A,
     bilinearForm_->Assemble();
     linearForm_->Assemble();
     
-    // Apply boundary conditions
     mfem::GridFunction boundaryFunc(fespace_);
     boundaryFunc.ProjectCoefficient(*boundaryCoeff_);
     
-    // Get essential boundary DOFs (all boundaries)
     mfem::Array<int> essBdr(fespace_->GetMesh()->bdr_attributes.Max());
     essBdr = 1;
     fespace_->GetEssentialTrueDofs(essBdr, essTdofList);
     
-    // Form linear system
     bilinearForm_->FormLinearSystem(essTdofList, boundaryFunc, *linearForm_, A, x, b);
 }
 

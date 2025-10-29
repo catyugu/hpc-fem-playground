@@ -15,9 +15,9 @@
 
  */
 
-#include "hpcfem/physics_joule_heating.hpp"
-#include "hpcfem/solver_block_gauss_seidel.hpp"
-#include "hpcfem/solver_hypre_amg.hpp"
+#include "hpcfem/physics/physics_joule_heating.hpp"
+#include "hpcfem/solvers/solver_block_gauss_seidel.hpp"
+#include "hpcfem/solvers/solver_hypre_amg.hpp"
 #include <iostream>
 #include <iomanip>
 #include <mfem.hpp>
