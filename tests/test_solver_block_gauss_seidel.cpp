@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 #include <mfem.hpp>
-#include "hpcfem/solver_block_gauss_seidel.hpp"
+#include "hpcfem/solvers/solver_block_gauss_seidel.hpp"
 
 #ifdef MFEM_USE_MPI
 #include <mpi.h>

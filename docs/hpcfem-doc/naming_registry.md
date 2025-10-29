@@ -52,7 +52,6 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
   - **Implements:** `SolverInterface`
   - **Backend:** HYPRE BoomerAMG
 
-
 ### Orchestration
 
 - `FemProblem` - Top-level FEM problem orchestrator (src/hpcfem/fem_problem.hpp/cpp)
@@ -78,24 +77,28 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 ### Core Interfaces
 
-- `src/hpcfem/physics_interface.hpp` - Abstract physics interface
+ `SolverInterface` - Abstract base class for linear solvers (src/hpcfem/core/solver_interface.hpp)
+
 - `src/hpcfem/solver_interface.hpp` - Abstract solver interface
 
 ### Physics Modules
 
+ `BlockGaussSeidelSolver` - Physics-informed block Gauss-Seidel preconditioner (src/hpcfem/solvers/solver_block_gauss_seidel.hpp/cpp)
+
 - `src/hpcfem/physics_electrostatics.hpp` - Electrostatics physics header
-- `src/hpcfem/physics_electrostatics.cpp` - Electrostatics physics implementation
+ `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solvers/solver_hypre_amg.hpp/cpp)
 - `src/hpcfem/physics_thermal.hpp` - Thermal diffusion physics header
 - `src/hpcfem/physics_thermal.cpp` - Thermal diffusion physics implementation
 - `src/hpcfem/physics_joule_heating.hpp` - Joule heating coupled physics header
-- `src/hpcfem/physics_joule_heating.cpp` - Joule heating coupled physics implementation
+ `src/hpcfem/core/solver_interface.hpp` - Abstract solver interface
 
 ### Solver Modules
 
 - `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
-- `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
-- `src/hpcfem/solver_block_gauss_seidel.hpp` - Block Gauss-Seidel preconditioner header
-- `src/hpcfem/solver_block_gauss_seidel.cpp` - Block Gauss-Seidel preconditioner implementation
+ `src/hpcfem/solvers/solver_hypre_amg.hpp` - HYPRE AMG solver header
+ `src/hpcfem/solvers/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
+ `src/hpcfem/solvers/solver_block_gauss_seidel.hpp` - Block Gauss-Seidel preconditioner header
+ `src/hpcfem/solvers/solver_block_gauss_seidel.cpp` - Block Gauss-Seidel preconditioner implementation
 
 ### Helper/Coefficient Classes
 

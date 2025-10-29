@@ -1,55 +1,27 @@
 /**
- * @file physics_thermal.hpp
+ * @file physics/physics_thermal.hpp
  * @brief Thermal diffusion physics implementation
- * 
- * Implements the steady-state heat equation: ∇·(κ∇T) = Q
- * where κ is the thermal conductivity and Q is the heat source term.
- * 
  */
 
 #ifndef HPCFEM_PHYSICS_THERMAL_HPP
 #define HPCFEM_PHYSICS_THERMAL_HPP
 
-#include "physics_interface.hpp"
+#include "hpcfem/core/physics_interface.hpp"
 #include "mfem.hpp"
 
 namespace hpcfem
 {
 
-/**
- * @class ThermalPhysics
- * @brief Concrete implementation for thermal diffusion problems
- * 
- * This class handles the assembly of the steady-state thermal problem:
- * - Bilinear form: a(T,v) = ∫ κ∇T·∇v dx
- * - Linear form: l(v) = ∫ Q·v dx
- */
 class ThermalPhysics : public PhysicsInterface
 {
 public:
 #ifdef MFEM_USE_MPI
-    /**
-     * @brief Constructor for parallel execution
-     * @param pmesh Parallel mesh (ownership not transferred)
-     * @param polynomialOrder Polynomial order for H1 finite elements
-     * @param thermalConductivity Thermal conductivity coefficient κ
-     * @param heatSource Heat source coefficient Q
-     * @param boundaryCoeff Boundary temperature coefficient
-     */
     ThermalPhysics(mfem::ParMesh* pmesh,
                    int polynomialOrder,
                    mfem::Coefficient* thermalConductivity,
                    mfem::Coefficient* heatSource,
                    mfem::Coefficient* boundaryCoeff);
 #else
-    /**
-     * @brief Constructor for serial execution
-     * @param mesh Mesh (ownership not transferred)
-     * @param polynomialOrder Polynomial order for H1 finite elements
-     * @param thermalConductivity Thermal conductivity coefficient κ
-     * @param heatSource Heat source coefficient Q
-     * @param boundaryCoeff Boundary temperature coefficient
-     */
     ThermalPhysics(mfem::Mesh* mesh,
                    int polynomialOrder,
                    mfem::Coefficient* thermalConductivity,
@@ -57,9 +29,6 @@ public:
                    mfem::Coefficient* boundaryCoeff);
 #endif
 
-    /**
-     * @brief Destructor - cleans up owned resources
-     */
     ~ThermalPhysics() override;
 
 #ifdef MFEM_USE_MPI
@@ -80,7 +49,6 @@ public:
 
 private:
     mfem::H1_FECollection* fec_;
-    
 #ifdef MFEM_USE_MPI
     mfem::ParFiniteElementSpace* fespace_;
     mfem::ParBilinearForm* bilinearForm_;

@@ -10,7 +10,7 @@
  * preconditioning versus treating the coupled system as a black box.
  */
 
-#include "hpcfem/solver_block_gauss_seidel.hpp"
+#include "hpcfem/solvers/solver_block_gauss_seidel.hpp"
 #include <mfem.hpp>
 #include <iostream>
 #include <iomanip>

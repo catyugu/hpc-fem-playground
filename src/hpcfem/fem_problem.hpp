@@ -9,8 +9,8 @@
 #ifndef HPCFEM_FEM_PROBLEM_HPP
 #define HPCFEM_FEM_PROBLEM_HPP
 
-#include "physics_interface.hpp"
-#include "solver_interface.hpp"
+#include "hpcfem/core/physics_interface.hpp"
+#include "hpcfem/core/solver_interface.hpp"
 #include "mfem.hpp"
 
 namespace hpcfem

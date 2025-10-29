@@ -1,9 +1,9 @@
 /**
- * @file physics_thermal.cpp
+ * @file physics/physics_thermal.cpp
  * @brief Implementation of thermal diffusion physics
  */
 
-#include "physics_thermal.hpp"
+#include "hpcfem/physics/physics_thermal.hpp"
 
 namespace hpcfem
 {
@@ -67,16 +67,13 @@ void ThermalPhysics::assemble(mfem::HypreParMatrix& A,
     bilinearForm_->Assemble();
     linearForm_->Assemble();
     
-    // Apply boundary conditions
     mfem::ParGridFunction boundaryFunc(fespace_);
     boundaryFunc.ProjectCoefficient(*boundaryCoeff_);
     
-    // Get essential boundary DOFs (all boundaries)
     mfem::Array<int> essBdr(fespace_->GetParMesh()->bdr_attributes.Max());
     essBdr = 1;
     fespace_->GetEssentialTrueDofs(essBdr, essTdofList);
     
-    // Form linear system
     bilinearForm_->FormLinearSystem(essTdofList, boundaryFunc, *linearForm_, A, x, b);
 }
 
@@ -93,16 +90,13 @@ void ThermalPhysics::assemble(mfem::SparseMatrix& A,
     bilinearForm_->Assemble();
     linearForm_->Assemble();
     
-    // Apply boundary conditions
     mfem::GridFunction boundaryFunc(fespace_);
     boundaryFunc.ProjectCoefficient(*boundaryCoeff_);
     
-    // Get essential boundary DOFs (all boundaries)
     mfem::Array<int> essBdr(fespace_->GetMesh()->bdr_attributes.Max());
     essBdr = 1;
     fespace_->GetEssentialTrueDofs(essBdr, essTdofList);
     
-    // Form linear system
     bilinearForm_->FormLinearSystem(essTdofList, boundaryFunc, *linearForm_, A, x, b);
 }
 
