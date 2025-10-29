@@ -10,7 +10,7 @@
  *   mpirun -np 4 ./benchmark_poisson --solver amg --mesh-size 64
  */
 
-#include "hpcfem/fem_problem.hpp"
+#include "hpcfem/core/fem_problem.hpp"
 #include "hpcfem/physics/physics_electrostatics.hpp"
 #include "hpcfem/solvers/solver_hypre_amg.hpp"
 #include "mfem.hpp"

@@ -1,9 +1,9 @@
 /**
- * @file fem_problem.cpp
- * @brief Implementation of FemProblem orchestrator
+ * @file core/fem_problem.cpp
+ * @brief Implementation of FemProblem orchestrator (moved to core/)
  */
 
-#include "fem_problem.hpp"
+#include "hpcfem/core/fem_problem.hpp"
 #include <stdexcept>
 
 namespace hpcfem
@@ -53,11 +53,9 @@ FemProblem::~FemProblem()
 
 void FemProblem::assemble()
 {
-    // Clean up previous assembly
     delete A_;
     A_ = nullptr;
     
-    // Initialize vectors
     auto* fespace = physics_->getFiniteElementSpace();
     int size = fespace->GetTrueVSize();
     b_.SetSize(size);
@@ -70,7 +68,6 @@ void FemProblem::assemble()
     A_ = new mfem::SparseMatrix();
 #endif
     
-    // Call physics to assemble
     physics_->assemble(*A_, b_, x_, essTdofList_);
     
     assembled_ = true;
@@ -83,10 +80,7 @@ void FemProblem::solve()
     {
         throw std::runtime_error("FemProblem::solve() called before assemble()");
     }
-    
-    // Solve the system
     solver_->solve(*A_, b_, x_);
-    
     solved_ = true;
 }
 
@@ -112,7 +106,6 @@ mfem::ParGridFunction* FemProblem::getSolutionGridFunction()
         solutionGf_ = new mfem::ParGridFunction(physics_->getFiniteElementSpace());
     }
     
-    // Recover FEM solution from true DOFs
     solutionGf_->SetFromTrueDofs(x_);
     
     return solutionGf_;
@@ -130,7 +123,6 @@ mfem::GridFunction* FemProblem::getSolutionGridFunction()
         solutionGf_ = new mfem::GridFunction(physics_->getFiniteElementSpace());
     }
     
-    // Recover FEM solution from true DOFs
     solutionGf_->SetFromTrueDofs(x_);
     
     return solutionGf_;

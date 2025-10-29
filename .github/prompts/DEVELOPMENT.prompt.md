@@ -37,8 +37,6 @@ src/
     └── solvers/
         ├── solver_hypre_amg.hpp
         ├── solver_hypre_amg.cpp
-        ├── solver_block_gauss_seidel.hpp
-        └── solver_block_gauss_seidel.cpp
 ```
 
 -----
@@ -48,7 +46,7 @@ src/
   * **PLAN:** Move all solver-related files (`solver_*.hpp`, `solver_*.cpp`) into a new `src/hpcfem/solvers/` directory.
   * **IMPLEMENT (Refactor):**
     1.  Create directory `src/hpcfem/solvers/`.
-    2.  Move `src/hpcfem/solver_hypre_amg.hpp`, `src/hpcfem/solver_hypre_amg.cpp`, `src/hpcfem/solver_block_gauss_seidel.hpp`, and `src/hpcfem/solver_block_gauss_seidel.cpp` into the new directory.
+    2.  Move `src/hpcfem/solver_hypre_amg.hpp`, `src/hpcfem/solver_hypre_amg.cpp` into the new directory.
     3.  Move `src/hpcfem/solver_interface.hpp` into `src/hpcfem/core/` (create this directory first).
   * **IMPLEMENT (Fix):**
     1.  Update `src/CMakeLists.txt` to reflect the new file paths for the `hpcfem` library target.
@@ -58,7 +56,6 @@ src/
             hpcfem/fem_problem.cpp
             ...
             hpcfem/solvers/solver_hypre_amg.cpp
-            hpcfem/solvers/solver_block_gauss_seidel.cpp
         )
         ```
     2.  Update all `#include` directives in all files (e.g., `fem_problem.cpp`, `physics_joule_heating.cpp`) to use the new paths. Per Guideline 18, paths should be relative to `src`.
