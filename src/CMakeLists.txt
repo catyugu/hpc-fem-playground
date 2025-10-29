@@ -1,11 +1,11 @@
 # hpcfem library
 add_library(hpcfem
-    hpcfem/fem_problem.cpp
-    hpcfem/physics_electrostatics.cpp
-    hpcfem/physics_thermal.cpp
-    hpcfem/physics_joule_heating.cpp
-    hpcfem/solver_hypre_amg.cpp
-    hpcfem/solver_block_gauss_seidel.cpp
+    hpcfem/core/fem_problem.cpp
+    hpcfem/core/finite_element_space.cpp
+    hpcfem/physics/physics_electrostatics.cpp
+    hpcfem/physics/physics_thermal.cpp
+    hpcfem/physics/physics_joule_heating.cpp
+    hpcfem/solvers/solver_hypre_amg.cpp
 )
 
 # Set include directories - src is the root

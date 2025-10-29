@@ -11,7 +11,7 @@
  * - Interface polymorphism works correctly
  */
 
-#include "hpcfem/physics_interface.hpp"
+#include "hpcfem/core/physics_interface.hpp"
 #include <gtest/gtest.h>
 #include <memory>
 

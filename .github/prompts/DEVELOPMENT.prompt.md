@@ -4,262 +4,294 @@ mode: agent
 
 # HPC-FEM Development Guidelines and Roadmap
 
-Here is a comprehensive TDD roadmap to guide an AI developer in refactoring the existing project and sequentially building it into the state-of-the-art research framework described in your document. This roadmap adheres strictly to your provided "DEVELOPING GUIDELINES."
+Here is a comprehensive TDD roadmap to refactor the `hpc-fem-playground` to support user-defined FE spaces and integrators, strictly adhering to your developing guidelines.
 
-This roadmap is divided into five major phases, moving from foundational software architecture to cutting-edge algorithmic implementation.
+**New Git Branch:** `feature/custom_fem_interfaces` (Guideline 9)
+**Primary Documentation File:** `docs/hpcfem-doc/custom_fem_interfaces.md` (Create and update this file throughout all steps) (Guideline 22)
 
-## Phase 1: Foundation, Build System, and Core Abstractions
+-----
 
-**Goal:** Establish a robust, modern, and extensible project layout that adheres to all development guidelines. This phase implements the vision from Part III of the provided document.
+### Part 1: Refactor Physics Modules for FE-Space Injection
 
-### Step 1.1: Modern CMake & Project Structure Refactor
+**Goal:** Refactor `PhysicsInterface` and its concrete implementations (e.g., `PhysicsElectrostatics`, `PhysicsThermal`) to *receive* a `mfem::ParFiniteElementSpace` rather than creating one internally. This allows the user to construct and provide any `mfem::ParFiniteElementSpace` (including custom derived classes) at the application level.
 
-* **PLAN:** Refactor the entire project to align with Part III and Guidelines 2, 14, 17, and 18. The current layout is a good start, but we must enforce strict target-based properties and dependency management.
-* **TEST (Manual Check & Build):** This step is foundational. The "test" is to successfully build all targets (`hpcfem` library, all tests, all examples) on the `dev` branch after refactoring and to manually verify the new structure.
-* **IMPLEMENT:**
-    1.  **Top-level `CMakeLists.txt`:** Define the project, C++ standard (e.g., C++17), and enable testing. Add `hpcfem` as the core library target using `add_library(hpcfem)`.
-    2.  **Dependency Management (Section 7.3):**
-        * Integrate `CPM.cmake` (Section 7.2) for lightweight dependencies like GoogleTest.
-        * Use `find_package` for heavy, system-level dependencies (MPI, MFEM, HYPRE). Assume these are provided by an environment manager like Spack (Section 7.3).
-    3.  **`src/CMakeLists.txt`:**
-        * Add sources to the `hpcfem` target.
-        * Use `target_include_directories(hpcfem PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})` to make `src` the root include path. This enforces Guideline 18 (no `../`). All includes will be `<hpcfem/fem_problem.hpp>`.
-        * Use `target_link_libraries(hpcfem PUBLIC mfem hypre)` to propagate dependencies.
-    4.  **`tests/CMakeLists.txt`:**
-        * Fetch GoogleTest using `CPMAddPackage`.
-        * Define each test file as a separate executable (e.g., `add_executable(test_solver_interface test_solver_interface.cpp)`).
-        * Link each test: `target_link_libraries(test_solver_interface PRIVATE hpcfem gtest_main)`.
-        * Add tests to CTest: `add_test(NAME test_solver_interface COMMAND test_solver_interface)`.
-    5.  **`example/` & `benchmark/`:** Refactor their `CMakeLists.txt` files identically to `tests/`.
-    6.  **Code Cleanup:**
-        * Move all `.hpp` files from `include/hpcfem` to `src/hpcfem` alongside their `.cpp` files (Guideline 17). Delete the `include` directory.
-        * Update all `#include` paths in the project to reflect the new structure (e.g., `#include "fem_problem.hpp"` becomes `#include "hpcfem/fem_problem.hpp"`).
-        * Place all code inside the `hpcfem` namespace (Guideline 2).
-        * Refactor all names to match Guideline 16 (e.g., `FemProblem`, `solver_interface` -> `SolverInterface`).
-        * Add Doxygen comments (Guideline 6) and update `docs/hpcfem-doc/naming_registry.md` (Guideline 5).
+#### Step 1.1: Planning
 
-* **CHECKLIST:**
-    * [ ] Project compiles fully with `cmake`, `cmake --build .`.
-    * [ ] All tests run and pass with `ctest`.
-    * [ ] `include` directory is deleted. `.hpp` and `.cpp` files are co-located in `src/hpcfem`.
-    * [ ] All `#include` paths are relative to `src` (e.g., `#include "hpcfem/solver_interface.hpp"`).
-    * [ ] All user code is in namespace `hpcfem`.
-    * [ ] All naming conventions (Guideline 16) are applied.
-    * [ ] No templates, lambdas, PCH, or macros are used (Guideline 1).
+  * **Analysis:** `PhysicsElectrostatics` and `PhysicsThermal` currently create their own `fec` and `fespace` in their constructors. The `setupOn` method then redundantly checks this internal `fespace` against the one provided by `FemProblem`.
+  * **Refactor Plan:**
+    1.  Modify `PhysicsInterface` to add a protected member: `mfem::ParFiniteElementSpace* fespace = nullptr;`.
+    2.  Remove the `fec` and `fespace` members from `PhysicsElectrostatics` and `PhysicsThermal`.
+    3.  Change the constructors of `PhysicsElectrostatics` and `PhysicsThermal` to no longer accept an `int order`. They only need the `mfem::ParMesh& pmesh` to query boundary attributes.
+    4.  Modify the `setupOn(mfem::ParFiniteElementSpace &fespace_in)` method in all `Physics` children:
+          * Remove the redundant `fespace->GetVDim() != fespace_in.GetVDim()` check.
+          * Assign the `fespace` from the `PhysicsInterface` base class: `this->fespace = &fespace_in;`.
+          * All internal forms (e.g., `a`, `b`) must now be created using `this->fespace`.
+  * **Affected Files:**
+      * `src/hpcfem/physics_interface.hpp`
+      * `src/hpcfem/physics_electrostatics.hpp` / `.cpp`
+      * `src/hpcfem/physics_thermal.hpp` / `.cpp`
+      * All files in `example/` and `tests/` that instantiate these physics modules.
 
-### Step 1.2: TDD - Refactor Physics and Solver Abstractions
+#### Step 1.2: Write Failing Tests
 
-* **PLAN:** The existing `PhysicsInterface` and `SolverInterface` are good, but they are not fully abstract or testable. We will solidify these interfaces.
-* **TEST:**
-    1.  **`test_solver_interface.cpp`:** Write a test `test_solver_interface_mock` that creates a mock `PhysicsInterface` and a mock `SolverInterface`. The test verifies that the `SolverInterface::solve` method is called once. This tests the *contract* of the interface.
-    2.  **`test_physics_abstraction.cpp`:** Write a test `test_physics_assembly` that uses a mock `FemProblem` to verify that `PhysicsInterface::assemble` correctly calls the problem's assembly methods.
-    3.  **`test_problem_abstraction.cpp`:** Update `test_problem_abstraction.cpp` to test the `FemProblem` class, verifying it can load a mesh and set up finite element spaces.
-* **IMPLEMENT:**
-    1.  `hpcfem/physics_interface.hpp`: Define `PhysicsInterface` with pure virtual methods: `virtual void assemble(FemProblem& problem) = 0;` and `virtual mfem::Operator& getOperator() = 0;`.
-    2.  `hpcfem/solver_interface.hpp`: Define `SolverInterface` with a pure virtual method: `virtual void solve(mfem::Vector& x, mfem::Vector& b) = 0;` and `virtual void setOperator(mfem::Operator& op) = 0;`.
-    3.  `hpcfem/fem_problem.hpp/cpp`: Refactor this class to *own* the mesh, finite element collection, and finite element space. It should provide public methods for physics classes to get references to these.
-    4.  `hpcfem/physics_electrostatics.hpp/cpp`: Refactor this to be a concrete implementation of `PhysicsInterface`. It will *not* own the `FemProblem` but will take it as a reference in its `assemble` method.
-    5.  `hpcfem/solver_hypre_amg.hpp/cpp`: Refactor this to be a concrete implementation of `SolverInterface`.
-* **REFACTOR:** Ensure all classes from `fem_problem`, `physics_electrostatics`, and `solver_hypre_amg` now pass the new and existing tests.
-* **DOCUMENT:** Update Doxygen comments for all refactored classes and register new names (Guideline 5).
-* **CHECKLIST:**
-    * [ ] All new and existing tests pass.
-    * [ ] `PhysicsInterface` and `SolverInterface` contain only pure virtual methods (and a virtual destructor).
-    * [ ] `PhysicsElectrostatics` and `SolverHypreAmg` are concrete, tested implementations.
-    * [ ] `FemProblem` correctly manages mesh and FE space resources.
+1.  **Modify `tests/test_problem_abstraction.cpp`:**
+      * **Hint:** This test will fail to compile. Update the instantiation of `PhysicsElectrostatics` to use the new constructor: `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`.
+      * This test now fails until the implementation in Step 1.3 is complete.
+2.  **Create New Test: `tests/test_custom_fespace_injection.cpp`**
+      * **Checklist:**
+          * [ ] Initialize MPI and load `testdata/testmesh_cube.mesh` as a `mfem::ParMesh`.
+          * [ ] Create a *non-default* FE collection, e.g., `auto *fec = new mfem::L2_FECollection(order, pmesh.Dimension());`.
+          * [ ] Create the `mfem::ParFiniteElementSpace* fespace` using this `fec`.
+          * [ ] Create `auto problem = std::make_unique<hpcfem::FemProblem>(pmesh, fespace);`.
+          * [ ] Create `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`.
+          * [ ] Call `problem->addPhysics(physics.get());`.
+          * [ ] **Assertion:** The test must `ASSERT(physics->getBilinearForm() != nullptr)` (after `setup()` is called by `addPhysics`).
+          * [ ] **Assertion:** The test must `ASSERT(physics->getBilinearForm()->FESpace() == fespace)`. This proves the `physics` module is using the externally-created L2 space, not one it created internally.
+      * This test will fail to compile or run until Step 1.3 is complete.
 
----
+#### Step 1.3: Implementation
 
-## Phase 2: Scalable Single-Physics Solvers (DDM + AMG)
+  * **Checklist:**
+      * [ ] **`src/hpcfem/physics_interface.hpp`:** Add `protected: mfem::ParFiniteElementSpace* fespace = nullptr;`.
+      * [ ] **`src/hpcfem/physics_electrostatics.hpp`:**
+          * Change constructor to `explicit PhysicsElectrostatics(mfem::ParMesh &pmesh);`.
+          * Remove `fec` and `fespace` members.
+      * [ ] **`src/hpcfem/physics_electrostatics.cpp`:**
+          * Update constructor to remove `fec` and `fespace` creation.
+          * Update `setupOn` as described in "Planning" (remove check, set `this->fespace`, use `this->fespace` for `a` and `b`).
+      * [ ] **`src/hpcfem/physics_thermal.hpp / .cpp`:** Apply the exact same refactoring as for `PhysicsElectrostatics`.
 
-**Goal:** Implement the scalable two-level Schwarz method with an AMG coarse solver, as described in Part I, Section 1. This directly addresses the performance bottleneck mentioned in the document.
+#### Step 1.4: Testing, Refactoring, and Documentation
 
-### Step 2.1: TDD - One-Level Domain Decomposition (Benchmark for Failure)
+1.  **Testing:**
+      * **Checklist:**
+          * [ ] Run `tests/test_problem_abstraction.cpp`. It must pass.
+          * [ ] Run `tests/test_custom_fespace_injection.cpp`. It must pass.
+2.  **Refactoring (Guideline 7):**
+      * **Checklist:**
+          * [ ] Update `example/ex0_cylinder_dirichlet.cpp`.
+          * [ ] Update `example/ex1_cube_mixed_bc.cpp`.
+          * [ ] Update `example/ex3_transient_heat.cpp`.
+          * **Hint:** The only change in these files should be removing the `order` argument from the `Physics...` constructor (e.g., `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh, order);` becomes `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`).
+          * [ ] Verify all examples compile and run correctly.
+3.  **Documentation (Guideline 6, 22):**
+      * **Checklist:**
+          * [ ] Update Doxygen comments for all modified constructors and methods.
+          * [ ] Update `docs/hpcfem-doc/custom_fem_interfaces.md` to mark Part 1 as complete.
 
-* **PLAN:** Implement a basic, one-level overlapping Schwarz method as a preconditioner. The TDD goal here is to create a *scalability test* that *fails* (i.e., shows poor scaling), proving the document's point (Section 1.1).
-* **TEST:**
-    1.  **`tests/test_ddm_one_level.cpp`:** Write a test that solves a 3D Poisson problem (using `PhysicsElectrostatics`) on a 3D mesh (e.g., `testdata/testmesh_cube.mesh`) using MPI (e.g., 4 processes). The test passes if the solution converges and the result is correct.
-    2.  **`benchmark/poisson_scaling_ddm1.cpp`:** Create a new benchmark that solves the 3D Poisson problem with increasing numbers of MPI processes (e.g., 2, 4, 8, 16). The benchmark *logs* the number of Krylov (GMRES/CG) iterations.
-* **IMPLEMENT:**
-    1.  `hpcfem/solver_one_level_schwarz.hpp/cpp`: Create a new class implementing `SolverInterface` (or rather, `mfem::Solver` to act as a preconditioner).
-    2.  This class will use MFEM's parallel mesh partitioning (`mfem::ParMesh`) and finite element space (`mfem::ParFiniteElementSpace`).
-    3.  The `solve` method will implement the additive Schwarz algorithm: parallel local solves on each subdomain's `A_i` (Section 1.2).
-* **TESTING (Benchmark):** Run the `poisson_scaling_ddm1` benchmark. The "pass" condition for this step is observing and logging that the iteration count *increases significantly* as the process count grows. This confirms the "failure" of the one-level method (Section 1.1).
-* **CHECKLIST:**
-    * [ ] `test_ddm_one_level` passes (correctness).
-    * [ ] `poisson_scaling_ddm1` benchmark runs and produces logs.
-    * [ ] Logged data confirms that iteration count scales poorly with processor count.
-    * [ ] New class `SolverOneLevelSchwarz` is documented and registered (Guideline 5).
+-----
 
-### Step 2.2: TDD - Two-Level DDM with AMG Coarse Solver
+### Part 2: Refactor Physics Modules for Integrator Injection
 
-* **PLAN:** Implement the two-level Schwarz method by adding a coarse-grid correction, as defined by the equation in Section 1.2. We will use our existing `SolverHypreAmg` as the coarse solver $A_H^{-1}$.
-* **TEST:**
-    1.  **`tests/test_ddm_two_level.cpp`:** Write a correctness test, similar to `test_ddm_one_level.cpp`, that solves the 3D Poisson problem using the new two-level preconditioner.
-    2.  **`benchmark/poisson_scaling_ddm2.cpp`:** Copy the `poisson_scaling_ddm1` benchmark and modify it to use the new two-level solver.
-* **IMPLEMENT:**
-    1.  `hpcfem/solver_two_level_schwarz.hpp/cpp`: Create the new class.
-    2.  It will require the same local solves as the one-level method (the $\sum R_i^T A_i^{-1} R_i$ term).
-    3.  It will *also* construct the coarse grid. Use a standard Galerkin projection $A_H = \Psi^T A \Psi$ (Section 1.2). For the prolongation $\Psi$, use the built-in capabilities of `mfem::ParFiniteElementSpace` to define the coarse-to-fine mapping.
-    4.  Instantiate `hpcfem::SolverHypreAmg` to solve the coarse problem $A_H^{-1}$ (Section 1.3).
-    5.  Combine these in the preconditioner's `solve` method: $\tilde{B} = \Psi A_H^{-1} \Psi^T + \sum R_i^T A_i^{-1} R_i$ (Section 1.2).
-* **TESTING (Benchmark):** Run the `poisson_scaling_ddm2` benchmark.
-* **REFACTOR/VERIFY:** Compare the logged iteration counts from `poisson_scaling_ddm2` (two-level) against `poisson_scaling_ddm1` (one-level). The TDD pass condition is met if the iteration count for the two-level method remains *robustly low and nearly constant* as the number of processes increases. This demonstrates scalability (Section 1.2).
-* **CHECKLIST:**
-    * [ ] `test_ddm_two_level` passes (correctness).
-    * [ ] `poisson_scaling_ddm2` benchmark runs and produces logs.
-    * [ ] Logged data confirms that iteration count is low and (near) constant, proving scalability.
-    * [ ] New class `SolverTwoLevelSchwarz` is documented and registered (Guideline 5).
+**Goal:** Refactor `PhysicsInterface` and children to *accept* user-created integrators, rather than hard-coding them in `setupOn`. This allows the user to provide standard MFEM integrators or their own custom-derived classes.
 
----
+#### Step 2.1: Planning
 
-## Phase 3: Physics-Informed Multiphysics Solvers
+  * **Analysis:** `Physics...::setupOn` methods hard-code the creation of coefficients (e.g., `epsilonCoeff`) and integrators (e.g., `mfem::DiffusionIntegrator`). This logic must be removed from the `Physics` modules and moved to the user-facing application (`example/` or `test/`).
+  * **Refactor Plan:**
+    1.  Create a new header `src/hpcfem/integrator_info.hpp` (Guideline 14, 24). This file will define structs to hold integrator pointers and their optional markers. (Guideline 4: No nested classes).
+    2.  **`src/hpcfem/integrator_info.hpp` content:**
+        ```cpp
+        #include "mfem.hpp"
+        #include <memory>
 
-**Goal:** Implement block-structured preconditioners for coupled systems, moving from a "black-box" to a "physics-informed" approach as described in Part I, Section 2.
+        namespace hpcfem {
 
-### Step 3.1: TDD - Define Coupled Electro-Thermal Problem
+        // Info struct for Bilinear Domain Integrators
+        struct BilinearIntegratorInfo {
+            std::unique_ptr<mfem::BilinearFormIntegrator> integrator;
+            std::unique_ptr<mfem::Array<int>> marker; // nullptr for all domains
+        };
 
-* **PLAN:** Implement the Joule Heating problem from Section 2.4. This requires a new "Thermal" physics class and a "Coupled" physics class.
-* **TEST:**
-    1.  **`tests/test_physics_thermal.cpp`:** Create a new test for a *standalone* transient heat problem (similar to `example/ex3_transient_heat.cpp`). This test verifies the thermal physics assembly.
-    2.  **`tests/test_physics_coupling.cpp`:** Update this test (which is currently empty) to test the coupled electro-thermal problem. The test will:
-        * Assemble the monolithic $2 \times 2$ block system (Section 2.4).
-        * Solve it with a "black-box" direct solver (e.g., `mfem::UMFPackSolver`).
-        * Verify the solution is correct (e.g., temperature increases where current flows).
-* **IMPLEMENT:**
-    1.  `hpcfem/physics_thermal.hpp/cpp`: Create a new `PhysicsThermal` class implementing `PhysicsInterface`.
-    2.  `hpcfem/physics_joule_heating.hpp/cpp`: Create `PhysicsJouleHeating` implementing `PhysicsInterface`. This class will:
-        * Internally hold instances of `PhysicsElectrostatics` and `PhysicsThermal`.
-        * Override the `assemble` method to build the $2 \times 2$ block matrix $A = \begin{pmatrix} K_e(T) & 0 \\ C(V) & K_t \end{pmatrix}$ (Section 2.4) as an `mfem::BlockOperator`.
-* **CHECKLIST:**
-    * [ ] `test_physics_thermal` passes.
-    * [ ] `test_physics_coupling` passes (i.e., the monolithic coupled problem can be assembled and solved correctly).
-    * [ ] New classes `PhysicsThermal` and `PhysicsJouleHeating` are documented and registered (Guideline 5).
+        // Info struct for Linear Domain Integrators
+        struct LinearIntegratorInfo {
+            std::unique_ptr<mfem::LinearFormIntegrator> integrator;
+            std::unique_ptr<mfem::Array<int>> marker; // nullptr for all domains
+        };
 
-### Step 3.2: TDD - Block-Triangular (Gauss-Seidel) Preconditioner
+        // Info struct for Bilinear Boundary Integrators
+        struct BilinearBoundaryIntegratorInfo {
+            std::unique_ptr<mfem::BilinearFormIntegrator> integrator;
+            std::unique_ptr<mfem::Array<int>> marker; // MUST NOT be null
+        };
 
-* **PLAN:** Implement the block-triangular (Gauss-Seidel) preconditioner described in Sections 2.2 and 2.4. This is a physics-informed solver.
-* **TEST:**
-    1.  **`tests/test_solver_block_gauss_seidel.cpp`:** Create a new test. It will:
-        * Set up the `PhysicsJouleHeating` problem.
-        * Solve the system using GMRES preconditioned by the new `SolverBlockGaussSeidel`.
-        * The test passes if the solver converges to the correct solution (comparing against the direct solver result from 3.1).
-    2.  **`benchmark/joule_heating_solvers.cpp`:** Create a benchmark that solves the coupled problem with:
-        * Monolithic AMG (e.g., `SolverHypreAmg` on the `mfem::BlockOperator`).
-        * The new `SolverBlockGaussSeidel`.
-        The benchmark logs iterations and solve time.
-* **IMPLEMENT:**
-    1.  `hpcfem/solver_block_gauss_seidel.hpp/cpp`: Create a new class implementing `mfem::Solver`.
-    2.  The constructor will take references to the diagonal block solvers (e.g., two `SolverHypreAmg` instances, one for $K_e$ and one for $K_t$) (Section 2.4).
-    3.  The `solve` method will implement the block forward substitution (Section 2.2):
-        1.  Solve with $\tilde{K}_e$.
-        2.  Update the right-hand side using $C(V)$.
-        3.  Solve with $\tilde{K}_t$.
-* **TESTING (Benchmark):** Run the `joule_heating_solvers` benchmark.
-* **REFACTOR/VERIFY:** The TDD pass condition is met if the `SolverBlockGaussSeidel` converges in *significantly fewer iterations* and/or *less time* than the "black-box" monolithic AMG, proving the superiority of the physics-informed approach (Section 2.1).
-* **CHECKLIST:**
-    * [ ] `test_solver_block_gauss_seidel` passes (correctness).
-    * [ ] `joule_heating_solvers` benchmark runs and produces logs.
-    * [ ] Logs confirm the block solver is more efficient than the monolithic solver.
-    * [ ] New class `SolverBlockGaussSeidel` is documented and registered (Guideline 5).
+        // Info struct for Linear Boundary Integrators
+        struct LinearBoundaryIntegratorInfo {
+            std::unique_ptr<mfem::LinearFormIntegrator> integrator;
+            std::unique_ptr<mfem::Array<int>> marker; // MUST NOT be null
+        };
 
----
+        } // namespace hpcfem
+        ```
+    3.  Modify `src/hpcfem/physics_interface.hpp`:
+          * `#include "hpcfem/integrator_info.hpp"`.
+          * Add `protected` vectors to store the integrators:
+              * `std::vector<hpcfem::BilinearIntegratorInfo> bilinearIntegrators;`
+              * `std::vector<hpcfem::LinearIntegratorInfo> linearIntegrators;`
+              * `std::vector<hpcfem::BilinearBoundaryIntegratorInfo> bilinearBoundaryIntegrators;`
+              * `std::vector<hpcfem::LinearBoundaryIntegratorInfo> linearBoundaryIntegrators;`
+          * Add `public virtual` methods to add integrators:
+              * `virtual void addBilinearIntegrator(std::unique_ptr<mfem::BilinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker = nullptr);`
+              * `virtual void addLinearIntegrator(std::unique_ptr<mfem::LinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker = nullptr);`
+              * `virtual void addBilinearBoundaryIntegrator(std::unique_ptr<mfem::BilinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker);`
+              * `virtual void addLinearBoundaryIntegrator(std::unique_ptr<mfem::LinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker);`
+    4.  Modify `src/hpcfem/physics_interface.cpp`: Implement these `add...` methods. They just construct the appropriate `...Info` struct and `std::move` the `unique_ptr`s into the correct `std::vector`.
+    5.  Modify `PhysicsElectrostatics` (and `PhysicsThermal`):
+          * **`hpp`:** Remove all `set...` methods (`setEpsilon`, `setSource`, `setNeumann`, `setDirichlet`). Remove all `mfem::Coefficient*`, `mfem::Vector*`, and marker `mfem::Array<int>` members.
+          * **`cpp`:**
+              * Update constructor: Remove all coefficient and marker initialization.
+              * Update `setupOn`: Remove *all* `new ...Integrator` and `new ...Coefficient` lines.
+              * **Implement New Logic in `setupOn`:**
+                ```cpp
+                // This logic MUST follow the Part 1 refactor
+                delete a; a = new mfem::ParBilinearForm(this->fespace);
+                delete b; b = new mfem::ParLinearForm(this->fespace);
 
-## Phase 4: Parallel-in-Time (PinT) Solvers
+                // Add domain bilinear integrators
+                for (auto &info : bilinearIntegrators) {
+                    if (info.marker == nullptr) {
+                        a->AddDomainIntegrator(info.integrator.release()); // MFEM takes ownership
+                    } else {
+                        a->AddDomainIntegrator(info.integrator.release(), *info.marker);
+                    }
+                }
+                bilinearIntegrators.clear(); // Clear vector of now-null ptrs
 
-**Goal:** Implement a Parallel-in-Time (PinT) solver and demonstrate its effectiveness for parabolic problems and its failure/remedy for hyperbolic problems, as described in Part I, Section 3.
+                // ... Repeat for linearIntegrators on b ...
+                linearIntegrators.clear();
 
-### Step 4.1: TDD - MGRIT for Parabolic Problems (Test for Success)
+                // ... Repeat for bilinearBoundaryIntegrators on a ...
+                bilinearBoundaryIntegrators.clear();
 
-* **PLAN:** Implement the MGRIT (or Parareal) algorithm (Section 3.1) and apply it to the parabolic (diffusive) transient heat problem.
-* **TEST:**
-    1.  **`tests/test_solver_mgrit_parabolic.cpp`:**
-        * Set up the `PhysicsTransientHeat` problem.
-        * First, solve it using standard, sequential time-stepping (e.g., Backward Euler) and save the final solution vector.
-        * Second, solve the *same* problem using the new MGRIT solver.
-        * The test passes if the final solution from MGRIT *exactly matches* the sequential solution after a few iterations.
-* **IMPLEMENT:**
-    1.  `hpcfem/solver_mgrit.hpp/cpp`: Create a new class. This is complex. It will need to:
-        * Implement the MGRIT V-cycle (Section 3.1).
-        * Define a "fine" propagator $\mathcal{F}$ (e.g., one step of Backward Euler).
-        * Define a "coarse" propagator $\mathcal{G}$ (e.g., one step of Backward Euler with a much larger time step $\Delta T = N \Delta t$) (Section 3.1).
-        * The "all-at-once" system is solved iteratively. This requires MPI parallelism across time-steps.
-* **CHECKLIST:**
-    * [ ] `test_solver_mgrit_parabolic` passes (correctness).
-    * [ ] The MGRIT solver converges in a few iterations (e.S., 3-5) for the parabolic problem.
-    * [ ] New class `SolverMGRIT` is documented and registered (Guideline 5).
+                // ... Repeat for linearBoundaryIntegrators on b ...
+                linearBoundaryIntegrators.clear();
+                ```
+                **Note:** This implementation (`release()` and `clear()`) means `setupOn` is a one-time operation. This is correct and MFEM-compliant, as the forms take ownership of the integrator pointers.
 
-### Step 4.2: TDD - MGRIT for Hyperbolic Problems (Test for Failure & Fix)
+#### Step 2.2: Write Failing Tests
 
-* **PLAN:** Demonstrate the failure of standard PinT for hyperbolic problems (Section 3.2) and then implement the physics-aware fix (Section 3.3).
-* **TEST (Cycle):**
-    1.  **`tests/test_physics_advection.cpp`:** Create a new test for a simple 3D advection equation. Test passes if the sequential time-stepped solution is correct.
-    2.  **`tests/test_solver_mgrit_hyperbolic_fail.cpp`:** Run the *exact same* `SolverMGRIT` from Step 4.1 on the new `PhysicsAdvection` problem. The test *passes* if the solver *fails to converge* in a reasonable number of iterations (e.g., > 50), confirming the "hyperbolic challenge" (Section 3.2).
-    3.  **`tests/test_solver_mgrit_hyperbolic_pass.cpp`:** This is the final test. It runs a *modified* MGRIT solver on the advection problem. The test passes if it *now converges rapidly* (e.g., < 10 iterations).
-* **IMPLEMENT:**
-    1.  `hpcfem/physics_advection.hpp/cpp`: Create a new `PhysicsAdvection` class.
-    2.  Run the test `test_solver_mgrit_hyperbolic_fail` and verify it fails to converge.
-    3.  **Refactor `SolverMGRIT`:**
-        * Modify the `SolverMGRIT` class to accept a *strategy* or *sub-class* for the coarse-grid operator $\mathcal{G}$.
-        * Create `CoarseOpStandard` (the original, failing $\Delta T$ version).
-        * Create `CoarseOpSemiLagrangian` (the fix). This operator traces the characteristic curves backward in time to build the coarse propagator (Section 3.3).
-* **TESTING:** Run `test_solver_mgrit_hyperbolic_pass` (using `CoarseOpSemiLagrangian`). Verify it passes.
-* **CHECKLIST:**
-    * [ ] `test_physics_advection` passes.
-    * [ ] `test_solver_mgrit_hyperbolic_fail` *logs* a failure to converge.
-    * [ ] `test_solver_mgrit_hyperbolic_pass` *passes* with the new characteristic-based operator.
-    * [ ] `SolverMGRIT` is refactored, and new classes (`PhysicsAdvection`, `CoarseOpSemiLagrangian`) are documented and registered (Guideline 5).
+1.  **Modify `tests/test_problem_abstraction.cpp`:**
+      * **Hint:** This test will fail to compile as all `set...` methods are gone.
+      * **New Test Logic:**
+          * [ ] `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`
+          * [ ] Create coefficients: `auto *epsCoeff = new mfem::ConstantCoefficient(1.0);`
+          * [ ] Create integrators: `auto diffInteg = std::make_unique<mfem::DiffusionIntegrator>(*epsCoeff);`
+          * [ ] Add integrators: `physics->addBilinearIntegrator(std::move(diffInteg));`
+          * [ ] **(Repeat for a source term)** `auto *srcCoeff = new mfem::ConstantCoefficient(1.0);`
+          * [ ] `auto srcInteg = std::make_unique<mfem::DomainLFIntegrator>(*srcCoeff);`
+          * [ ] `physics->addLinearIntegrator(std::move(srcInteg));`
+          * [ ] Add `physics` to `problem`, `setup`, `solve`, and assert a non-zero solution.
+      * This test fails until Step 2.3 is complete.
+2.  **Create New Test: `tests/test_custom_integrator.cpp`**
+      * **Hint:** As requested, check MFEM implementation (e.g., `fem/integ.hpp`) to see base classes.
+      * **Custom Class Definition (in the test file):**
+        ```cpp
+        // Test class that scales a mass matrix.
+        class MyTestIntegrator : public mfem::BilinearFormIntegrator {
+        private:
+            mfem::ConstantCoefficient scale;
+        public:
+            explicit MyTestIntegrator(double s) : scale(s) {}
+            void AssembleElementMatrix(const mfem::FiniteElement &el,
+                                       mfem::ElementTransformation &Tr,
+                                       mfem::DenseMatrix &elmat) override {
+                mfem::MassIntegrator massInteg;
+                massInteg.AssembleElementMatrix(el, Tr, elmat);
+                elmat *= scale.constant;
+            }
+        };
+        ```
+      * **Test Logic:**
+          * [ ] Setup a `FemProblem` with `PhysicsElectrostatics` (as in the test above).
+          * [ ] Add the custom integrator: `auto customInteg = std::make_unique<MyTestIntegrator>(123.0);`
+          * [ ] `physics->addBilinearIntegrator(std::move(customInteg));`
+          * [ ] Add a source term, setup, and solve. Store the result `x_custom`.
+          * [ ] **Verification:** Setup a *second* `FemProblem` (`problem2`).
+          * [ ] Add a *standard* `mfem::MassIntegrator` with a coefficient of 123.0.
+          * [ ] `auto *coeff = new mfem::ConstantCoefficient(123.0);`
+          * [ ] `auto massInteg = std::make_unique<mfem::MassIntegrator>(*coeff);`
+          * [ ] `physics2->addBilinearIntegrator(std::move(massInteg));`
+          * [ ] Add the *same* source term, setup, and solve. Store the result `x_standard`.
+          * [ ] **Assertion:** `ASSERT(mfem::Distance(x_custom, x_standard) < 1.e-12)`.
+      * This test fails until Step 2.3 is complete.
 
----
+#### Step 2.3: Implementation
 
-## Phase 5: AI-Enhanced Numerical Solvers
+  * **Checklist:**
+      * [ ] Create and implement `src/hpcfem/integrator_info.hpp` as planned.
+      * [ ] Modify `src/hpcfem/physics_interface.hpp` (add vectors and `add...` methods) as planned.
+      * [ ] Implement `src/hpcfem/physics_interface.cpp` (`add...` methods) as planned.
+      * [ ] Modify `src/hpcfem/physics_electrostatics.hpp / .cpp` (remove `set...`, coefficients, update `setupOn`) as planned.
+      * [ ] Modify `src/hpcfem/physics_thermal.hpp / .cpp` (remove `set...`, coefficients, update `setupOn`) as planned.
 
-**Goal:** Integrate machine learning to learn and optimize solver components, as described in Part II. This requires a C++/Python bridge.
+#### Step 2.4: Testing, Refactoring, and Documentation
 
-### Step 5.1: TDD - GNN-Based AMG Prolongation Operator
+1.  **Testing:**
+      * **Checklist:**
+          * [ ] Run `tests/test_problem_abstraction.cpp`. It must pass.
+          * [ ] Run `tests/test_custom_integrator.cpp`. It must pass.
+2.  **Refactoring (Guideline 7):**
+      * **Checklist:**
+          * [ ] **Completely rewrite `example/ex0`, `ex1`, and `ex3`.**
+          * [ ] **Hint:** These files are now the *user's* responsibility. They must manually create all `mfem::Coefficient`s (for epsilon, source, etc.), create all `mfem::...Integrator`s, and add them to the `physics` module using the new `add...Integrator` methods *before* calling `problem->addPhysics()`.
+          * [ ] Verify all examples compile and run correctly.
+3.  **Documentation (Guideline 5, 6, 22):**
+      * **Checklist:**
+          * [ ] Add new `struct` and method names to `docs/hpcfem-doc/naming_registry.md`.
+          * [ ] Add Doxygen comments for all new `struct`s and `add...` methods.
+          * [ ] Create `docs/mfem-basic-usage/user_defined_physics.md` explaining the new workflow (create fespace -\> create problem -\> create physics -\> create coeffs -\> create integrators -\> add integrators -\> add physics -\> setup -\> solve).
+          * [ ] Update `docs/hpcfem-doc/custom_fem_interfaces.md` to mark Part 2 as complete.
 
-* **PLAN:** Use a Graph Neural Network (GNN) to learn the AMG prolongation operator $P$, replacing the standard heuristic in `SolverHypreAmg` (or a new, custom AMG) (Section 4).
-* **TEST:**
-    1.  **`tests/test_python_bridge.cpp`:** Create a test to verify that C++ can initialize the Python interpreter (using `hpc-fem-playground` conda env, Guideline 19), import a simple Python module (e.g., `torch`), and call a function.
-    2.  **`tests/test_gnn_amg.cpp`:** This is the key test.
-        * Set up a "hard" problem (e.g., `PhysicsElectrostatics` with highly anisotropic coefficients).
-        * Solve it using the standard `SolverHypreAmg` and log the iteration count (this is our baseline).
-        * Solve it using the new `SolverGnnAmg`.
-        * The test passes if the iteration count for `SolverGnnAmg` is *less than or equal to* the baseline.
-* **IMPLEMENT:**
-    1.  **Python Bridge:** Integrate a C++/Python interop library (e.g., `pybind11`). Configure CMake to build it.
-    2.  **Python GNN:** In `scripts/` (or a new `ml/` dir), create a Python script `gnn_amg.py` that uses `pytorch_geometric` to define a GNN (Section 4.2).
-    3.  **Python Training:** Create a training script (`train_gnn.py`) that loads matrices, trains the GNN using the *unsupervised energy-minimizing loss function* $\mathcal{L}(P) = \sum_{k} \| E \cdot e_{smooth}^{(k)} \|_A^2$ (Section 4.3), and saves the trained model.
-    4.  `hpcfem/solver_gnn_amg.hpp/cpp`: Create a new `SolverInterface`. This class will:
-        * Call the Python bridge to load the pre-trained GNN model.
-        * During setup, extract the matrix graph, pass it to the GNN, and get back the prolongation operator $P$.
-        * Build the rest of the AMG hierarchy using this $P$.
-* **CHECKLIST:**
-    * [ ] `test_python_bridge` passes.
-    * [ ] `train_gnn.py` script runs and saves a model file.
-    * [ ] `test_gnn_amg` passes (i.e., GNN-based solver is at least as good as the baseline).
-    * [ ] New class `SolverGnnAmg` is documented and registered (Guideline 5).
+-----
 
-### Step 5.2: TDD - RL-Based Hyperparameter Tuning
+### Part 3: Parallel and Stress Testing (Guideline 10, 25)
 
-* **PLAN:** Use Reinforcement Learning (RL) to *dynamically* tune a solver parameter online, as described in Section 5. We will target the relaxation factor $\omega$ in a standard iterative solver (e.g., SOR) or the penalty parameter $\rho$ in ADMM (Section 5.2).
-* **TEST:**
-    1.  **`benchmark/rl_tuning_vs_static.cpp`:** Create a benchmark to solve a specific problem (e.g., `PhysicsElectrostatics`).
-        * **Baseline:** Run the solver (e.g., `mfem::SOR`) with the *theoretically optimal static* relaxation parameter $\omega$. Log the wall-clock time.
-        * **RL-Tuned:** Run the new `SolverRlTunedSor`.
-        * The TDD pass condition is that the *total wall-clock time* for the RL-tuned solver (including RL agent overhead) is *less than* the baseline static solver's time.
-* **IMPLEMENT:**
-    1.  **Python RL Agent:** In `ml/`, create `rl_agent.py`. This defines the RL agent (e.g., a Deep Q-Network) that implements the policy $\pi(a|s)$ (Section 5.3).
-    2.  **Training:** Create `train_rl.py` to train the agent by repeatedly running the solver, feeding it `State` (residual history) and `Reward` (residual reduction) (Section 5.2).
-    3.  `hpcfem/solver_rl_tuned_sor.hpp/cpp`: Create a new `SolverInterface`. This C++ class will:
-        * Call the Python bridge to load the pre-trained RL agent.
-        * In its `solve` loop, at each iteration $k$:
-            1.  Get the current `State` $s_k$ (residual norm, etc.).
-            2.  Call the RL agent $\pi(a_k|s_k)$ to get the *action* $a_k$ (the new parameter $\omega_k$).
-            3.  Perform the SOR iteration using $\omega_k$.
-            4.  Calculate the `Reward` $r_k$ and (if training) send it back to the agent.
-* **CHECKLIST:**
-    * [ ] `train_rl.py` script runs and saves a trained agent model.
-    * [ ] `benchmark/rl_tuning_vs_static.cpp` benchmark runs.
-    * [ ] Benchmark logs confirm the RL-tuned solver is *faster* in wall time than the optimal static solver, proving the value of online adaptation (Section 5.3).
-    * [ ] New class `SolverRlTunedSor` is documented and registered (Guideline 5).
+**Goal:** Ensure the new, flexible design works correctly with MPI and scales to large problems.
+
+#### Step 3.1: Write Failing Test (Parallel)
+
+1.  **Create New Test: `tests/test_parallel_custom_integrator.cpp`**
+      * **Checklist:**
+          * [ ] Copy `tests/test_custom_integrator.cpp`.
+          * [ ] **Hint:** This test *must* be runnable with `mpirun -np N ...`.
+          * [ ] The test *must* initialize MPI (`mfem::Mpi::Init();`).
+          * [ ] The test must use `mfem::ParMesh`, `mfem::ParFiniteElementSpace`, and `hpcfem::FemProblem`.
+          * [ ] The test logic (comparing `MyTestIntegrator` to a standard `MassIntegrator`) remains identical.
+          * [ ] **Assertion:** The parallel solution comparison `mfem::Distance(x_custom, x_standard)` must be `< 1.e-12` when run on 2, 4, or more processors.
+      * This test will fail if any assumptions made in the refactoring were not parallel-safe.
+
+#### Step 3.2: Implementation (Bug Fixes)
+
+  * **Checklist:**
+      * [ ] Run the `test_parallel_custom_integrator` with `mpirun -np 4`.
+      * [ ] **Implementation:** No new code is expected. This step is purely for *fixing* any parallel bugs exposed by the test. The new design should be inherently parallel-safe as it relies on MFEM's parallel forms (`ParBilinearForm`, etc.), and the integrators are assembled element-wise.
+
+#### Step 3.3: Stress Test
+
+1.  **Create New Benchmark: `benchmark/poisson_scaling_femproblem/main.cpp`**
+      * **Checklist:**
+          * [ ] Create a new benchmark executable (add to `benchmark/CMakeLists.txt`).
+          * [ ] This benchmark will mimic `benchmark/poisson_scaling`, but will use the newly refactored `FemProblem` and `PhysicsElectrostatics`.
+          * [ ] The `main` function should contain a loop over `ref_levels`.
+          * [ ] **Inside the loop:**
+              * [ ] Create `pmesh` and refine it.
+              * [ ] Create `fespace` (e.g., H1).
+              * [ ] Create `problem` (FemProblem).
+              * [ ] Create `physics` (PhysicsElectrostatics).
+              * [ ] Create `coeff` and `integ` (e.g., `DiffusionIntegrator`).
+              * [ ] `physics->addBilinearIntegrator(...)`.
+              * [ ] (Add source term integrator).
+              * [ ] `problem->addPhysics(physics.get());`
+              * [ ] `problem->setup();`
+              * [ ] `problem->solve();`
+          * [ ] Run this benchmark with MPI (`mpirun`) and increase `ref_levels` until the DoFs exceed 1e7 (Guideline 10).
+      * **Goal:** The test passes if it completes all refinement levels without crashing or producing errors.
+
+#### Step 3.4: Final Documentation and Merge
+
+  * **Checklist:**
+      * [ ] (Guideline 7) Ensure *all* tests, examples, and benchmarks compile and run.
+      * [ ] (Guideline 6) Ensure all new code has clean Doxygen comments.
+      * [ ] (Guideline 22) Finalize `docs/hpcfem-doc/custom_fem_interfaces.md`.
+      * [ ] (Guideline 8) Search the branch for any `TODO`s added and resolve them.
+      * [ ] (Guideline 9) Merge the `feature/custom_fem_interfaces` branch into `dev` and delete the feature branch.

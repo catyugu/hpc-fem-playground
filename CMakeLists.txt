@@ -38,6 +38,10 @@ if(NOT EXISTS ${MFEM_INCLUDE_DIR})
     endif()
     message(STATUS "MFEM download completed")
 endif()
+# Prevent MFEM from configuring/building its own examples and tests
+# Set these cache variables before adding MFEM so they take effect.
+set(MFEM_ENABLE_EXAMPLES OFF CACHE BOOL "Disable building MFEM examples" FORCE)
+set(MFEM_ENABLE_TESTING  OFF CACHE BOOL "Disable building MFEM tests" FORCE)
 
 add_subdirectory(${MFEM_INCLUDE_DIR})
 

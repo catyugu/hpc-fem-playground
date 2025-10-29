@@ -29,12 +29,15 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     
     # Register with CTest for serial execution
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-    
+    # Ensure the test runs from the project source root so relative testdata paths resolve
+    set_tests_properties(${TEST_NAME} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
     # Add parallel MPI variant if MPI is available
     if(MFEM_USE_MPI)
         add_test(NAME ${TEST_NAME}_parallel 
                  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 
                  ${MPIEXEC_PREFLAGS} $<TARGET_FILE:${TEST_NAME}> ${MPIEXEC_POSTFLAGS})
+        set_tests_properties(${TEST_NAME}_parallel PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
     endif()
 endforeach()
 

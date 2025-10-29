@@ -43,15 +43,9 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
   - **Formula:** Q = σ|∇V|²
   - **Purpose:** Evaluates nonlinear Joule heating power density at quadrature points
   
-- `BlockGaussSeidelSolver` - Physics-informed block Gauss-Seidel preconditioner (src/hpcfem/solver_block_gauss_seidel.hpp/cpp)
-  - **Extends:** `mfem::Solver`
-  - **Algorithm:** Block-triangular forward substitution exploiting one-way coupling
-  - **Status:** Implemented, requires explicit coupling matrix C in block (1,0)
-  
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
   - **Backend:** HYPRE BoomerAMG
-
 
 ### Orchestration
 
@@ -78,33 +72,32 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 ### Core Interfaces
 
-- `src/hpcfem/physics_interface.hpp` - Abstract physics interface
+- `SolverInterface` - Abstract base class for linear solvers (src/hpcfem/core/solver_interface.hpp)
+
 - `src/hpcfem/solver_interface.hpp` - Abstract solver interface
 
 ### Physics Modules
 
-- `src/hpcfem/physics_electrostatics.hpp` - Electrostatics physics header
-- `src/hpcfem/physics_electrostatics.cpp` - Electrostatics physics implementation
-- `src/hpcfem/physics_thermal.hpp` - Thermal diffusion physics header
-- `src/hpcfem/physics_thermal.cpp` - Thermal diffusion physics implementation
-- `src/hpcfem/physics_joule_heating.hpp` - Joule heating coupled physics header
-- `src/hpcfem/physics_joule_heating.cpp` - Joule heating coupled physics implementation
+- `src/hpcfem/physics/physics_electrostatics.hpp` - Electrostatics physics header
+- `src/hpcfem/physics/physics_electrostatics.cpp` - Electrostatics physics implementation
+- `src/hpcfem/physics/physics_thermal.hpp` - Thermal diffusion physics header
+- `src/hpcfem/physics/physics_thermal.cpp` - Thermal diffusion physics implementation
+- `src/hpcfem/physics/physics_joule_heating.hpp` - Joule heating coupled physics header
 
 ### Solver Modules
 
-- `src/hpcfem/solver_hypre_amg.hpp` - HYPRE AMG solver header
-- `src/hpcfem/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
-- `src/hpcfem/solver_block_gauss_seidel.hpp` - Block Gauss-Seidel preconditioner header
-- `src/hpcfem/solver_block_gauss_seidel.cpp` - Block Gauss-Seidel preconditioner implementation
+- `src/hpcfem/core/solver_interface.hpp` - Abstract solver interface
+- `src/hpcfem/solvers/solver_hypre_amg.hpp` - HYPRE AMG solver header
+- `src/hpcfem/solvers/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
 
 ### Helper/Coefficient Classes
 
-- `src/hpcfem/joule_heating_coefficient.hpp` - Joule heating coefficient Q = σ|∇V|²
+- `src/hpcfem/physics/joule_heating_coefficient.hpp` - Joule heating coefficient Q = σ|∇V|²
 
 ### Problem Orchestration
 
-- `src/hpcfem/fem_problem.hpp` - FEM problem orchestrator header
-- `src/hpcfem/fem_problem.cpp` - FEM problem orchestrator implementation
+- `src/hpcfem/core/fem_problem.hpp` - FEM problem orchestrator header
+- `src/hpcfem/core/fem_problem.cpp` - FEM problem orchestrator implementation
 
 ### Tests
 
@@ -116,7 +109,6 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
 - `tests/test_physics_coupling.cpp` - Coupled physics test
 - `tests/test_physics_joule_heating_block.cpp` - Joule heating BlockOperator assembly test
-- `tests/test_solver_block_gauss_seidel.cpp` - Block Gauss-Seidel preconditioner test
 
 ### Examples
 

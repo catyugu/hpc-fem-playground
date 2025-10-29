@@ -10,9 +10,9 @@
  * - FemProblem orchestrator
  */
 
-#include "hpcfem/physics_electrostatics.hpp"
-#include "hpcfem/solver_hypre_amg.hpp"
-#include "hpcfem/fem_problem.hpp"
+#include "hpcfem/physics/physics_electrostatics.hpp"
+#include "hpcfem/solvers/solver_hypre_amg.hpp"
+#include "hpcfem/core/fem_problem.hpp"
 #include "mfem.hpp"
 #include <iostream>
 #include <cmath>

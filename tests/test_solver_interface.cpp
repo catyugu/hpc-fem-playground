@@ -9,7 +9,7 @@
  * 3. The interface compiles correctly
  */
 
-#include "hpcfem/solver_interface.hpp"
+#include "hpcfem/core/solver_interface.hpp"
 #include <iostream>
 #include <cstdlib>
 
