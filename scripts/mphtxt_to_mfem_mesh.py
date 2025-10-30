@@ -227,10 +227,14 @@ def write_mfem_mesh(nodes, blocks, outpath, sdim=None):
 	for block in blocks:
 		mfem_geom = mfem_geom_from_name(block['type_name'], block['nverts'], sdim)
 		for idx, e in enumerate(block['elems']):
+			# element attribute: use parsed geometric entity index directly
+			# (do NOT add 1 here). Boundary face attributes are handled
+			# separately when explicit face blocks are parsed. Using +1 here
+			# caused domain attributes to be shifted to a 2-based numbering.
 			attr = 1
 			if block.get('geom_indices') is not None:
 				if idx < len(block['geom_indices']):
-					attr = block['geom_indices'][idx] + 1
+					attr = block['geom_indices'][idx]
 			# Classify strictly for 3D: only triangles/quads are valid boundary
 			if mfem_geom in vol_types:
 				elements.append((attr, mfem_geom, e))
