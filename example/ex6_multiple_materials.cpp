@@ -246,6 +246,58 @@ int main(int argc, char *argv[])
     // STEP 6: BOUNDARY CONDITIONS
     // ============================================================
 
+    // Identify exterior boundaries using MFEM's FaceIsInterior() method
+    // Interior boundaries (material interfaces) should NOT have convection BC
+    std::cout << "\nIdentifying exterior vs interior boundaries..." << std::endl;
+    
+    Array<int> exterior_bdr_attrs;
+    Array<int> interior_bdr_attrs;
+    
+    for (int be = 0; be < mesh.GetNBE(); be++)
+    {
+        int bdr_attr = mesh.GetBdrAttribute(be);
+        int face_idx, orientation;
+        mesh.GetBdrElementFace(be, &face_idx, &orientation);
+        
+        // Check if this face is interior (shared between elements)
+        if (mesh.FaceIsInterior(face_idx))
+        {
+            // This is an interior boundary (material interface)
+            if (interior_bdr_attrs.Find(bdr_attr) == -1)
+            {
+                interior_bdr_attrs.Append(bdr_attr);
+            }
+        }
+        else
+        {
+            // This is an exterior boundary
+            if (exterior_bdr_attrs.Find(bdr_attr) == -1)
+            {
+                exterior_bdr_attrs.Append(bdr_attr);
+            }
+        }
+    }
+    
+    // Sort for cleaner output
+    exterior_bdr_attrs.Sort();
+    interior_bdr_attrs.Sort();
+    
+    std::cout << "  Exterior boundaries: ";
+    for (int i = 0; i < exterior_bdr_attrs.Size(); i++)
+    {
+        std::cout << exterior_bdr_attrs[i];
+        if (i < exterior_bdr_attrs.Size() - 1) std::cout << ", ";
+    }
+    std::cout << std::endl;
+    
+    std::cout << "  Interior boundaries: ";
+    for (int i = 0; i < interior_bdr_attrs.Size(); i++)
+    {
+        std::cout << interior_bdr_attrs[i];
+        if (i < interior_bdr_attrs.Size() - 1) std::cout << ", ";
+    }
+    std::cout << std::endl;
+
     // Dirichlet BC: boundary 4 (1-based in mesh file, but 0-based in MFEM)
     Array<int> ess_bdr(mesh.bdr_attributes.Max());
     ess_bdr = 0;
@@ -261,16 +313,29 @@ int main(int argc, char *argv[])
     std::cout << "  Dirichlet BC: boundary 4, T = " << T_dirichlet << " K" << std::endl;
     std::cout << "  Essential DOFs: " << ess_tdof_list.Size() << std::endl;
 
-    // Robin BC (convection): all exterior boundaries except Dirichlet
+    // Robin BC (convection): only on exterior boundaries, excluding Dirichlet BC
     Array<int> robin_bdr(mesh.bdr_attributes.Max());
-    robin_bdr = 1; // Apply to all boundaries
+    robin_bdr = 0; // Start with no boundaries
+    
+    // Apply Robin BC only to exterior boundaries
+    for (int i = 0; i < exterior_bdr_attrs.Size(); i++)
+    {
+        int attr = exterior_bdr_attrs[i];
+        if (attr <= mesh.bdr_attributes.Max())
+        {
+            robin_bdr[attr - 1] = 1; // 0-based indexing
+        }
+    }
+    
+    // Remove boundary 4 (Dirichlet BC)
     if (mesh.bdr_attributes.Max() >= 4)
     {
         robin_bdr[4 - 1] = 0; // Remove boundary 4 (Dirichlet)
     }
 
-    std::cout << "  Robin BC (convection): all other exterior boundaries" << std::endl;
+    std::cout << "  Robin BC (convection): applied only to exterior boundaries" << std::endl;
     std::cout << "    h = " << h_conv << " W/mm²/K, T_amb = " << T_amb << " K" << std::endl;
+    std::cout << "    (Interior boundaries excluded)" << std::endl;
 
     // ============================================================
     // STEP 7: ASSEMBLE THE LINEAR SYSTEM
