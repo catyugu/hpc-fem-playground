@@ -153,20 +153,6 @@ int main(int argc, char *argv[])
         std::cout << "  Attribute " << attr << ": " << count << " elements" << std::endl;
     }
 
-    // Print boundary attributes
-    std::cout << "\nBoundary attributes:" << std::endl;
-    for (int i = 0; i < mesh.bdr_attributes.Size(); i++)
-    {
-        int bdr_attr = mesh.bdr_attributes[i];
-        int count = 0;
-        for (int be = 0; be < mesh.GetNBE(); be++)
-        {
-            if (mesh.GetBdrAttribute(be) == bdr_attr)
-                count++;
-        }
-        std::cout << "  Boundary " << bdr_attr << ": " << count << " boundary elements" << std::endl;
-    }
-
     // ============================================================
     // STEP 3: MATERIAL PROPERTIES (in mm units)
     // ============================================================
