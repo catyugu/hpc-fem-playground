@@ -3,6 +3,7 @@
 #include <iostream>
 #include <map>
 #include <cmath>
+#include <chrono>
 
 /**
  * Example 6: Multi-Material Thermal Analysis
@@ -325,6 +326,8 @@ int main(int argc, char *argv[])
 
     std::cout << "\nAssembling linear system..." << std::endl;
 
+    std::chrono::high_resolution_clock::time_point solving_start = std::chrono::high_resolution_clock::now();
+
     // Bilinear form: a(u,v) = ∫ k ∇u·∇v dx + ∫ h u·v ds
     BilinearForm a(&fes);
     a.AddDomainIntegrator(new DiffusionIntegrator(k_coef));
@@ -403,6 +406,8 @@ int main(int argc, char *argv[])
     double T_max = T.Max();
     double T_avg = T.Sum() / T.Size();
 
+    std::chrono::high_resolution_clock::time_point solving_end = std::chrono::high_resolution_clock::now();
+
     std::cout << "\n========================================" << std::endl;
     std::cout << "SOLUTION SUMMARY" << std::endl;
     std::cout << "========================================" << std::endl;
@@ -411,6 +416,7 @@ int main(int argc, char *argv[])
     std::cout << "  Max: " << T_max << " K" << std::endl;
     std::cout << "  Avg: " << T_avg << " K" << std::endl;
     std::cout << "========================================" << std::endl;
+    std::cout << "Solving time: " << std::chrono::duration_cast<std::chrono::milliseconds>(solving_end - solving_start).count() << " ms" << std::endl;
 
     // Sanity check
     const double T_expected_min = 303.0;
