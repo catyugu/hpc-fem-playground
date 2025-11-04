@@ -11,8 +11,8 @@
  * Different materials have different thermal conductivities.
  *
  * PROBLEM SETUP:
- * - Domain 1 (mesh attr 2):   FR4 (k = 0.3 W/m/K)
- * - Domain 2 (mesh attr 19):  Plastic (k = 0.2 W/m/K)
+ * - Domain 1 (mesh attr 1):   FR4 (k = 0.3 W/m/K)
+ * - Domain 2 (mesh attr 2):  Plastic (k = 0.2 W/m/K)
  * - Domain 11 (mesh attr 11): Silicon (k = 150 W/m/K)
  * - All other domains:        Aluminum (k = 205 W/m/K)
  *
