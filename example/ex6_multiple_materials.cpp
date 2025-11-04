@@ -11,9 +11,9 @@
  * Different materials have different thermal conductivities.
  *
  * PROBLEM SETUP:
- * - Domain 1 (mesh attr 1):   FR4 (k = 0.3 W/m/K)
- * - Domain 2 (mesh attr 2):  Plastic (k = 0.2 W/m/K)
- * - Domain 11 (mesh attr 11): Silicon (k = 150 W/m/K)
+ * - Domain 1 :   FR4 (k = 0.3 W/m/K)
+ * - Domain 2 :  Plastic (k = 0.2 W/m/K)
+ * - Domain 11 : Silicon (k = 150 W/m/K)
  * - All other domains:        Aluminum (k = 205 W/m/K)
  *
  * BOUNDARY CONDITIONS:
@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
     // Use CG solver with GS preconditioner
     GSSmoother M(A);
     CGSolver solver;
-    solver.SetRelTol(1e-12);
+    solver.SetRelTol(1e-9);
     solver.SetMaxIter(10000);
     solver.SetPrintLevel(1);
     solver.SetPreconditioner(M);
@@ -418,7 +418,7 @@ int main(int argc, char *argv[])
     
     if (T_min < T_expected_min || T_max > T_expected_max)
     {
-        std::cout << "\n⚠️  WARNING: Temperature out of expected range!" << std::endl;
+        std::cout << "\nWARNING: Temperature out of expected range!" << std::endl;
         std::cout << "   Expected range: [" << T_expected_min << ", " 
                   << T_expected_max << "] K" << std::endl;
         std::cout << "   Actual range:   [" << T_min << ", " << T_max << "] K" << std::endl;
