@@ -57,8 +57,8 @@ int main(int argc, char *argv[])
     }
 
     // Physical & frequency parameters
-    const double a = 0.01016;      // x length (m)
-    const double b = 0.02286;      // y length (m)
+    const double a = 0.02286;      // x length (m)
+    const double b = 0.01016;      // y length (m)
     const double freq = 10e9;      // 10 GHz
     const double c0 = 299792458.0; // speed of light
     const double omega = 2.0 * M_PI * freq;
@@ -181,9 +181,9 @@ int main(int argc, char *argv[])
     std::cout << "Assembled matrix size: " << A.Height() << " x " << A.Width() << std::endl;
     std::cout << "RHS (reduced) norm L2: " << B.Norml2() << ", Linf: " << B.Normlinf() << std::endl;
 
-    std::cout << "Solving linear system (GMRES)..." << std::endl;
+    std::cout << "Solving linear system (CG)..." << std::endl;
     GSSmoother M(A);
-    GMRESSolver solver;
+    CGSolver solver;
     solver.SetOperator(A);
     solver.SetRelTol(1e-8);
     solver.SetAbsTol(1e-6);
