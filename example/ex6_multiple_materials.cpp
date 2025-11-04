@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     const double Q_Silicon = 2e8 / (SCALE_LENGTH * SCALE_LENGTH * SCALE_LENGTH); // 2e8 W/m³
 
     // Convection coefficient [W/mm²/K]
-    const double h_conv = 50.0 / SCALE_LENGTH; // 50 W/m²/K
+    const double h_conv = 50.0 / (SCALE_LENGTH * SCALE_LENGTH); // 50 W/m²/K
 
     // Temperatures [K]
     const double T_amb = 303.15;      // Ambient temperature
@@ -207,17 +207,13 @@ int main(int argc, char *argv[])
     PiecewiseConstantCoefficient k_coef(&mesh, k_Aluminum); // default is Aluminum
     
     // Map domain attributes to materials
-    // IMPORTANT: Mesh attributes are 1-based, but in MFEM they're used as-is
-    // Domain 1 → attribute 2 (FR4)
-    // Domain 2 → attribute 19 (Plastic)
-    // Domain 11 → attribute 11 (Silicon)
-    k_coef.SetMaterialProperty(2, k_FR4);      // Domain 1 (FR4)
-    k_coef.SetMaterialProperty(19, k_Plastic); // Domain 2 (Plastic)
+    k_coef.SetMaterialProperty(1, k_FR4);      // Domain 1 (FR4)
+    k_coef.SetMaterialProperty(2, k_Plastic); // Domain 2 (Plastic)
     k_coef.SetMaterialProperty(11, k_Silicon); // Domain 11 (Silicon)
 
     std::cout << "\nMaterial assignment (domain attribute → material):" << std::endl;
-    std::cout << "  Attribute 2:  FR4 (k = " << k_FR4 << " W/mm/K)" << std::endl;
-    std::cout << "  Attribute 19: Plastic (k = " << k_Plastic << " W/mm/K)" << std::endl;
+    std::cout << "  Attribute 1:  FR4 (k = " << k_FR4 << " W/mm/K)" << std::endl;
+    std::cout << "  Attribute 2: Plastic (k = " << k_Plastic << " W/mm/K)" << std::endl;
     std::cout << "  Attribute 11: Silicon (k = " << k_Silicon << " W/mm/K)" << std::endl;
     std::cout << "  All others:   Aluminum (k = " << k_Aluminum << " W/mm/K)" << std::endl;
 
