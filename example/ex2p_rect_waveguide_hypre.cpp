@@ -1,3 +1,6 @@
+// Adapted from ex2_rect_waveguide.cpp
+// Uses HypreAmgSolver (hpcfem wrapper) instead of GMRES
+
 #include "mfem.hpp"
 #include <fstream>
 #include <iostream>
@@ -5,13 +8,16 @@
 #include <vector>
 #include <cmath>
 
+// Hypre AMG solver wrapper
+#include "hpcfem/solvers/solver_hypre_amg.hpp"
+
 // Rectangular waveguide example (frequency-domain, single-frequency excitation)
 // - Uses Nedelec (ND) finite elements (H(curl))
 // - Ports: boundary attribute 3 (input) and 4 (output/termination)
 // - PEC on attributes 1,2,5,6 (tangential E = 0)
 // - Modal excitation: TE10 on port 1 (simple analytical profile)
 // - Mesh: testdata/testmesh_bar.mesh
-// - Output: results/ex2_rect_waveguide
+// - Output: results/ex8_rect_waveguide_hypre
 
 using namespace mfem;
 
@@ -46,12 +52,7 @@ public:
     }
 };
 
-// -------------------- Minimal PML support (adapted from share/mfem/examples/ex25.cpp)
-// This adds a Cartesian PML region and coefficients to be used only on
-// elements marked as PML (attribute 2). It is intentionally minimal and
-// avoids changing boundary attributes (so existing port/bdr numbering is
-// preserved).
-
+// (PML/helpers copied from ex2; unchanged)
 class PML
 {
 private:
@@ -70,15 +71,10 @@ public:
     Array2D<real_t> GetDomainBdr() { return dom_bdr; }
     Array<int> * GetMarkedPMLElements() { return &elems; }
 
-    // Mark elements whose vertices lie outside the computational domain
-    // (i.e. inside the PML region). This does NOT touch boundary attributes.
     void SetAttributes(Mesh *mesh_);
-
-    // Stretching: returns a complex scale for each coordinate direction
     void StretchFunction(const Vector &x, std::vector<std::complex<real_t>> &dxs);
 };
 
-// VectorCoefficient wrapper that calls a function that uses the PML
 class PMLDiagMatrixCoefficient : public VectorCoefficient
 {
 private:
@@ -102,11 +98,9 @@ public:
     }
 };
 
-// Global helpers used by the PML coefficient functions
 void detJ_JT_J_inv_abs(const Vector &x, PML * pml, Vector &D);
 void detJ_inv_JT_J_abs(const Vector &x, PML * pml, Vector &D);
 
-// Implementation ---------------------------------------------------------
 PML::PML(Mesh *mesh_, Array2D<real_t> length_)
     : mesh(mesh_), length(length_)
 {
@@ -146,7 +140,6 @@ void PML::SetAttributes(Mesh *mesh_)
         // Initialize element attribute to 1
         el->SetAttribute(1);
 
-        // If any vertex lies in the PML, mark element as PML (attribute 2)
         for (int iv = 0; iv < nrvert; ++iv)
         {
             int vert_idx = vertices[iv];
@@ -177,7 +170,6 @@ void PML::StretchFunction(const Vector &x, std::vector<std::complex<real_t>> &dx
     real_t n = 2.0;
     real_t c = 5.0;
     real_t coeff;
-    // We don't need omega here; use a mild scaling via c
 
     for (int i = 0; i < dim; ++i)
     {
@@ -228,13 +220,10 @@ void detJ_inv_JT_J_abs(const Vector &x, PML * pml, Vector &D)
     }
 }
 
-// ----------------------------------------------------------------------
-
 int main(int argc, char *argv[])
 {
-
     const char *mesh_file = "testdata/testmesh_bar.mesh";
-    const char *output_dir = "results/ex2_rect_waveguide";
+    const char *output_dir = "results/ex2p_rect_waveguide_hypre";
     if (argc > 1)
     {
         mesh_file = argv[1];
@@ -257,67 +246,71 @@ int main(int argc, char *argv[])
     // Finite element order
     int order = 1;
 
-    // Read mesh
-    Mesh mesh(mesh_file);
-    int dim = mesh.Dimension();
+#ifdef MFEM_USE_MPI
+    MPI_Session mpi(argc, argv);
+    int myid = mpi.WorldRank();
+#else
+    int myid = 0;
+#endif
+
+    // Read mesh (serial first, then convert to ParMesh if MPI enabled)
+    Mesh *mesh = new Mesh(mesh_file);
+    int dim = mesh->Dimension();
     if (dim != 3)
     {
-        std::cout << "ex2_rect_waveguide requires a 3D mesh. Mesh dimension: " << dim << std::endl;
+        std::cout << "ex8_rect_waveguide_hypre requires a 3D mesh. Mesh dimension: " << dim << std::endl;
         return 1;
     }
 
-    std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << std::endl;
+#ifdef MFEM_USE_MPI
+    ParMesh *pmesh = new ParMesh(MPI_COMM_WORLD, *mesh);
+    delete mesh;
+#else
+    Mesh *pmesh = mesh;
+#endif
 
-    // Debug: report boundary attribute counts
-    int nbdr = mesh.GetNBE();
-    Array<int> bdr_attr_counts(mesh.bdr_attributes.Max());
-    bdr_attr_counts = 0;
-    for (int be = 0; be < nbdr; be++)
+    if (myid == 0)
     {
-        Element *b = mesh.GetBdrElement(be);
-        int a = b->GetAttribute();
-        if (a >= 1 && a <= bdr_attr_counts.Size())
-        {
-            bdr_attr_counts[a - 1]++;
-        }
-    }
-    std::cout << "Boundary elements: " << nbdr << std::endl;
-    for (int i = 0; i < bdr_attr_counts.Size(); i++)
-    {
-        if (bdr_attr_counts[i] > 0)
-        {
-            std::cout << "  attr " << (i + 1) << ": " << bdr_attr_counts[i] << " faces" << std::endl;
-        }
+        std::cout << "Mesh loaded: " << pmesh->GetNE() << " elements." << std::endl;
     }
 
     // -------------------- Setup PML region --------------------
     Array2D<real_t> length(dim, 2);
     length = 0.0;
-    // Assumption: attach a small PML on the +x side (port 4 side) to
-    // absorb outgoing waves. Adjust as needed for your mesh/scale.
     if (dim >= 1)
     {
         length(0, 1) = 0.001; // 2 mm PML thickness (tunable)
     }
-    PML pml(&mesh, length);
-    pml.SetAttributes(&mesh);
+    // PML accepts Mesh* and ParMesh derives from Mesh, so pass pmesh
+    PML pml(pmesh, length);
+    pml.SetAttributes(pmesh);
 
-    // ND (Nedelec) finite element space for H(curl)
+#ifdef MFEM_USE_MPI
     ND_FECollection fec(order, dim);
-    FiniteElementSpace fes(&mesh, &fec);
+    ParFiniteElementSpace fespace(pmesh, &fec);
+    HYPRE_BigInt true_size = fespace.GlobalTrueVSize();
+    if (myid == 0) std::cout << "Number of H(curl) dofs: " << true_size << std::endl;
 
-    std::cout << "Number of H(curl) dofs: " << fes.GetTrueVSize() << std::endl;
+    ParBilinearForm aform(&fespace);
+    ParLinearForm rhs(&fespace);
+    ParGridFunction x(&fespace);
+#else
+    ND_FECollection fec(order, dim);
+    FiniteElementSpace fespace(pmesh, &fec);
+    int true_size = fespace.GetTrueVSize();
+    std::cout << "Number of H(curl) dofs: " << true_size << std::endl;
+
+    BilinearForm aform(&fespace);
+    LinearForm rhs(&fespace);
+    GridFunction x(&fespace);
+#endif
 
     // Bilinear form: curl-curl - k0^2 * eps * I
-    BilinearForm aform(&fes);
-
-    // Restrict integrators to computational domain (attr 1) and to PML
-    // elements (attr 2). The PML adds modified coefficients on attr 2.
-    Array<int> attr(mesh.attributes.Max());
-    Array<int> attrPML(mesh.attributes.Max());
+    Array<int> attr(pmesh->attributes.Max());
+    Array<int> attrPML(pmesh->attributes.Max());
     attr = 0; attr[0] = 1;
     attrPML = 0;
-    if (mesh.attributes.Max() > 1)
+    if (pmesh->attributes.Max() > 1)
     {
         attrPML[1] = 1; // attribute 2 -> PML region
     }
@@ -329,11 +322,9 @@ int main(int argc, char *argv[])
     RestrictedCoefficient restr_muinv(muinv, attr);
     RestrictedCoefficient restr_omeg(omeg, attr);
 
-    // Integrators inside the computational domain (excluding the PML)
     aform.AddDomainIntegrator(new CurlCurlIntegrator(restr_muinv));
     aform.AddDomainIntegrator(new VectorFEMassIntegrator(restr_omeg));
 
-    // PML-adjusted integrators (use absolute-valued transformed coefficients)
     int cdim = (dim == 2) ? 1 : dim;
     PMLDiagMatrixCoefficient pml_c1_abs(cdim, detJ_inv_JT_J_abs, &pml);
     ScalarVectorProductCoefficient c1_abs(muinv, pml_c1_abs);
@@ -348,52 +339,68 @@ int main(int argc, char *argv[])
     aform.AddDomainIntegrator(new VectorFEMassIntegrator(restr_c2_abs));
 
     // Solution container
-    GridFunction x(&fes);
     x = 0.0;
 
-    // Essential (Dirichlet) BCs:
-    // - PEC on attributes 1,2,5,6 (tangential E = 0)
-    // - Ports on attributes 3 (drive) and 4 (termination)
-    Array<int> ess_bdr(mesh.bdr_attributes.Max());
+    Array<int> ess_bdr(pmesh->bdr_attributes.Max());
     ess_bdr = 0;
-    // PEC (set to zero tangential E)
     ess_bdr[1 - 1] = 1;
     ess_bdr[2 - 1] = 1;
     ess_bdr[5 - 1] = 1;
     ess_bdr[6 - 1] = 1;
-    // Ports (will be projected below)
     ess_bdr[3 - 1] = 1; // port 3: driven
 
     Array<int> ess_tdof_list;
-    fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+#ifdef MFEM_USE_MPI
+    fespace.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+#else
+    fespace.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+#endif
 
-    // Project port fields
-    // Drive amplitude (arbitrary scale)
     double amplitude = 1.0;
     TE10Modal te10(a, b, amplitude);
-    Array<int> port1(mesh.bdr_attributes.Max());
-    port1 = 0;
-    port1[1 - 1] = 1;
-    // For H(curl) (ND) spaces, project the tangential component on the boundary
-    // Drive port: attribute 3
-    Array<int> port3(mesh.bdr_attributes.Max());
+    Array<int> port3(pmesh->bdr_attributes.Max());
     port3 = 0;
     port3[3 - 1] = 1;
     x.ProjectBdrCoefficientTangent(te10, port3);
-    // Note: port 4 termination is handled by the PML (attr 2); we do not
-    // impose an essential (Dirichlet) boundary or zero projection here.
 
     // Assemble
     aform.Assemble();
 
-    // Debug: report norm of the projected boundary GridFunction (should be non-zero)
     std::cout << "Projected boundary x norm (L2): " << x.Norml2()
               << ", Linf: " << x.Normlinf() << std::endl;
 
-    // Form linear system and solve (indefinite Helmholtz-like). We'll use GMRES.
+    // Form linear system and solve
+#ifdef MFEM_USE_MPI
+    HypreParMatrix A;
+    Vector B, X;
+    rhs = 0.0;
+    rhs.Assemble();
+    aform.FormLinearSystem(ess_tdof_list, x, rhs, A, X, B);
+    if (myid == 0)
+    {
+        std::cout << "Assembled parallel matrix. True DOFs: " << A.GetGlobalNumRows() << std::endl;
+    }
+
+    std::cout << "Solving linear system with HypreAmgSolver..." << std::endl;
+    hpcfem::HypreAmgSolver amg_solver(1e-8, 2000, 0);
+    amg_solver.solve(A, B, X);
+    if (myid == 0)
+    {
+        std::cout << "AMG iterations: " << amg_solver.getNumIterations() << std::endl;
+        std::cout << "AMG final norm: " << amg_solver.getFinalNorm() << std::endl;
+    }
+
+    aform.RecoverFEMSolution(X, rhs, x);
+
+    // Save to ParaView (parallel)
+    ParaViewDataCollection paraview_dc(output_dir, pmesh);
+    paraview_dc.SetLevelsOfDetail(1);
+    paraview_dc.RegisterField("E_field", &x);
+    paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
+    paraview_dc.Save();
+#else
     SparseMatrix A;
     Vector B, X;
-    LinearForm rhs(&fes);
     rhs = 0.0;
     rhs.Assemble();
     aform.FormLinearSystem(ess_tdof_list, x, rhs, A, X, B);
@@ -401,32 +408,28 @@ int main(int argc, char *argv[])
     std::cout << "Assembled matrix size: " << A.Height() << " x " << A.Width() << std::endl;
     std::cout << "RHS (reduced) norm L2: " << B.Norml2() << ", Linf: " << B.Normlinf() << std::endl;
 
-    std::cout << "Solving linear system (GMRES)..." << std::endl;
-    GSSmoother M(A);
-    GMRESSolver solver;
-    solver.SetOperator(A);
-    solver.SetRelTol(1e-5);
-    solver.SetAbsTol(1e-5);
-    solver.SetMaxIter(1000);
-    solver.SetPrintLevel(1);
-    solver.SetPreconditioner(M);
-    solver.SetKDim(100);
-    solver.Mult(B, X);
+    std::cout << "Solving linear system with HypreAmgSolver..." << std::endl;
+    hpcfem::HypreAmgSolver amg_solver(1e-8, 2000, 0);
+    amg_solver.solve(A, B, X);
+    std::cout << "AMG iterations: " << amg_solver.getNumIterations() << std::endl;
+    std::cout << "AMG final norm: " << amg_solver.getFinalNorm() << std::endl;
 
     // Recover solution
     aform.RecoverFEMSolution(X, rhs, x);
 
     // Save to ParaView
-
     std::cout << "Saving solution to ParaView files..." << std::endl;
-
-    ParaViewDataCollection paraview_dc(output_dir, &mesh);
+    ParaViewDataCollection paraview_dc(output_dir, pmesh);
     paraview_dc.SetLevelsOfDetail(1);
     paraview_dc.RegisterField("E_field", &x);
     paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
     paraview_dc.Save();
+#endif
 
-    std::cout << "Done. Output in '" << output_dir << "'." << std::endl;
+    if (myid == 0)
+    {
+        std::cout << "Done. Output in '" << output_dir << "'." << std::endl;
+    }
 
     return 0;
 }
