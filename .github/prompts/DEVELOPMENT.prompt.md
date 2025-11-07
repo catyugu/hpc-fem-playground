@@ -2,296 +2,200 @@
 mode: agent
 ---
 
-# HPC-FEM Development Guidelines and Roadmap
+### **TDD Development Plan: General Waveguide Simulation Tool**
 
-Here is a comprehensive TDD roadmap to refactor the `hpc-fem-playground` to support user-defined FE spaces and integrators, strictly adhering to your developing guidelines.
+**Objective:** To create a general, robust, and parallel-capable tool for electromagnetic waveguide simulation within the `hpcfem` project. This tool will be developed in two main phases, both strictly following TDD.
 
-**New Git Branch:** `feature/custom_fem_interfaces` (Guideline 9)
-**Primary Documentation File:** `docs/hpcfem-doc/custom_fem_interfaces.md` (Create and update this file throughout all steps) (Guideline 22)
+1.  **Phase 1: 2D Eigenmode Solver:** Solves for the modal propagation constants (e.g., $k_c$, $\gamma$) and 2D vector field profiles (e.g., $TE_{10}$) on a waveguide cross-section. This is the foundation for the 3D solver's ports.
+2.  **Phase 2: 3D Frequency-Domain (S-Parameter) Solver:** Solves the full 3D vector Helmholtz equation for a driven problem to calculate S-parameters.
 
------
+---
 
-### Part 1: Refactor Physics Modules for FE-Space Injection
+### **Phase 1: 2D Vector Eigenmode Solver**
 
-**Goal:** Refactor `PhysicsInterface` and its concrete implementations (e.g., `PhysicsElectrostatics`, `PhysicsThermal`) to *receive* a `mfem::ParFiniteElementSpace` rather than creating one internally. This allows the user to construct and provide any `mfem::ParFiniteElementSpace` (including custom derived classes) at the application level.
+**Files to Create:**
+* `src/hpcfem/physics/physics_waveguide_2d_eigen.hpp`
+* `src/hpcfem/physics/physics_waveguide_2d_eigen.cpp`
+* `tests/test_physics_waveguide_2d_eigen.cpp`
 
-#### Step 1.1: Planning
+**Documentation:**
+* Add `hpcfem::PhysicsWaveguide2DEigen` to `docs/hpcfem-doc/naming_registry.md`.
+* Create `docs/hpcfem-doc/physics_waveguide_2d_eigen.md` explaining the physics and usage.
 
-  * **Analysis:** `PhysicsElectrostatics` and `PhysicsThermal` currently create their own `fec` and `fespace` in their constructors. The `setupOn` method then redundantly checks this internal `fespace` against the one provided by `FemProblem`.
-  * **Refactor Plan:**
-    1.  Modify `PhysicsInterface` to add a protected member: `mfem::ParFiniteElementSpace* fespace = nullptr;`.
-    2.  Remove the `fec` and `fespace` members from `PhysicsElectrostatics` and `PhysicsThermal`.
-    3.  Change the constructors of `PhysicsElectrostatics` and `PhysicsThermal` to no longer accept an `int order`. They only need the `mfem::ParMesh& pmesh` to query boundary attributes.
-    4.  Modify the `setupOn(mfem::ParFiniteElementSpace &fespace_in)` method in all `Physics` children:
-          * Remove the redundant `fespace->GetVDim() != fespace_in.GetVDim()` check.
-          * Assign the `fespace` from the `PhysicsInterface` base class: `this->fespace = &fespace_in;`.
-          * All internal forms (e.g., `a`, `b`) must now be created using `this->fespace`.
-  * **Affected Files:**
-      * `src/hpcfem/physics_interface.hpp`
-      * `src/hpcfem/physics_electrostatics.hpp` / `.cpp`
-      * `src/hpcfem/physics_thermal.hpp` / `.cpp`
-      * All files in `example/` and `tests/` that instantiate these physics modules.
+#### **TDD Step-by-Step Construction:**
 
-#### Step 1.2: Write Failing Tests
+**Step 1.1: Stub Class and Basic Test**
+* **Test:** `test_class_instantiation`
+    * Write a test in `test_physics_waveguide_2d_eigen.cpp` that includes the new header.
+    * The test will instantiate `hpcfem::PhysicsWaveguide2DEigen`.
+    * Assert that the pointer is not null.
+* **Implementation:**
+    * Create the stub `PhysicsWaveguide2DEigen` class in its `.hpp`/`.cpp` files.
+    * It must inherit from the `hpcfem::PhysicsInterface`.
+    * Implement empty virtual functions (e.g., `setup()`, `assemble()`, `solve()`).
 
-1.  **Modify `tests/test_problem_abstraction.cpp`:**
-      * **Hint:** This test will fail to compile. Update the instantiation of `PhysicsElectrostatics` to use the new constructor: `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`.
-      * This test now fails until the implementation in Step 1.3 is complete.
-2.  **Create New Test: `tests/test_custom_fespace_injection.cpp`**
-      * **Checklist:**
-          * [ ] Initialize MPI and load `testdata/testmesh_cube.mesh` as a `mfem::ParMesh`.
-          * [ ] Create a *non-default* FE collection, e.g., `auto *fec = new mfem::L2_FECollection(order, pmesh.Dimension());`.
-          * [ ] Create the `mfem::ParFiniteElementSpace* fespace` using this `fec`.
-          * [ ] Create `auto problem = std::make_unique<hpcfem::FemProblem>(pmesh, fespace);`.
-          * [ ] Create `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`.
-          * [ ] Call `problem->addPhysics(physics.get());`.
-          * [ ] **Assertion:** The test must `ASSERT(physics->getBilinearForm() != nullptr)` (after `setup()` is called by `addPhysics`).
-          * [ ] **Assertion:** The test must `ASSERT(physics->getBilinearForm()->FESpace() == fespace)`. This proves the `physics` module is using the externally-created L2 space, not one it created internally.
-      * This test will fail to compile or run until Step 1.3 is complete.
+**Step 1.2: Test 2D $H(curl)$ Space and PEC Boundary**
+* **Test:** `test_nd_space_and_pec_boundary`
+    * Load a 2D mesh (e.g., a simple 4-element rectangle).
+    * Define a boundary attribute for the outer wall (e.g., attribute 1).
+    * The test will:
+        1.  Initialize the `PhysicsWaveguide2DEigen` and call its `setup()` method, passing in the mesh and the PEC boundary attribute.
+        2.  Assert that the internal `FiniteElementSpace` is *not* null.
+        3.  Assert that the space is of type `mfem::FiniteElementCollection::NEDELEC_FE`.
+        4.  Assert that the `FiniteElementSpace::GetEssentialTrueDofs()` list is non-empty and contains the correct number of edge DoFs corresponding to the outer boundary.
+* **Implementation:**
+    * In `PhysicsWaveguide2DEigen::setup()`, create and store a `mfem::ParFiniteElementSpace`.
+    * Use an `mfem::ND_FECollection` (Nedelec $H(curl)$ elements).
+    * Store the PEC boundary attribute list (`mfem::Array<int>`).
+    * Call `fespace->GetEssentialTrueDofs(pecBdr, essTDoFs)`.
 
-#### Step 1.3: Implementation
+**Step 1.3: Test Bilinear Form Assembly (Lossless Case)**
+* **Test:** `test_eigen_matrix_assembly_lossless`
+    * Use a known 2x1 mesh.
+    * Call the `assemble()` method.
+    * The test must get the assembled operators (A and B).
+    * Assert that both `mfem::HypreParMatrix` pointers (for A and B) are not null.
+    * Assert that their dimensions are correct (equal to `fespace->GetTrueVSize()`).
+    * **Physics:** We are solving $\nabla_t \times (\mu_r^{-1} \nabla_t \times \vec{E}_t) = k_c^2 \epsilon_r \vec{E}_t$.
+* **Implementation:**
+    * `assemble()` will create two `mfem::ParBilinearForm`s: `a` and `b`.
+    * `a->AddDomainIntegrator(new mfem::CurlCurlIntegrator(muInvCoeff));` (This is $[S_t]$).
+    * `b->AddDomainIntegrator(new mfem::VectorFEMassIntegrator(epsilonCoeff));` (This is $[T_t]$).
+    * `a->Assemble()` and `b->Assemble()`.
+    * Finalize the operators using `a->ParallelAssemble()` and `b->ParallelAssemble()`, and apply essential BCs.
 
-  * **Checklist:**
-      * [ ] **`src/hpcfem/physics_interface.hpp`:** Add `protected: mfem::ParFiniteElementSpace* fespace = nullptr;`.
-      * [ ] **`src/hpcfem/physics_electrostatics.hpp`:**
-          * Change constructor to `explicit PhysicsElectrostatics(mfem::ParMesh &pmesh);`.
-          * Remove `fec` and `fespace` members.
-      * [ ] **`src/hpcfem/physics_electrostatics.cpp`:**
-          * Update constructor to remove `fec` and `fespace` creation.
-          * Update `setupOn` as described in "Planning" (remove check, set `this->fespace`, use `this->fespace` for `a` and `b`).
-      * [ ] **`src/hpcfem/physics_thermal.hpp / .cpp`:** Apply the exact same refactoring as for `PhysicsElectrostatics`.
+**Step 1.4: Test Eigenvalue Solution (Lossless $TE_{10}$)**
+* **Test:** `test_te10_cutoff_frequency_serial_and_parallel`
+    * Load a mesh of a standard rectangular waveguide (e.g., WR-90, width `a = 22.86e-3` m).
+    * Run the full `setup()`, `assemble()`, and `solve()`.
+    * **Check:** The analytical cutoff wavenumber is $k_c = \pi / a$. The eigenvalue $\lambda$ from the solver is $k_c^2$.
+    * The test must:
+        1.  Call `solve()` and get the lowest eigenvalue $\lambda_0$.
+        2.  Calculate the expected $\lambda_{exp} = (\pi / 0.02286)^2$.
+        3.  Assert that `abs(lambda_0 - lambda_exp) < 1e-3`.
+    * This test *must* be run in serial (`mpirun -n 1 ...`) and parallel (`mpirun -n 4 ...`) and pass both.
+* **Implementation:**
+    * You will need an eigenvalue solver. Add `src/hpcfem/solvers/solver_eigen_slepc.hpp` (or similar) that wraps the SLEPc library.
+    * `PhysicsWaveguide2DEigen::solve()` will call this solver to solve $A\{e\} = \lambda B\{e\}$.
+    * The solver should return the computed eigenvalues.
 
-#### Step 1.4: Testing, Refactoring, and Documentation
+**Step 1.5: Test Lossy Media (Complex Eigenvalue)**
+* **Test:** `test_lossy_waveguide_complex_kc`
+    * Use the same WR-90 mesh.
+    * In the test, define a *complex* permittivity $\epsilon_r = \epsilon' - j\epsilon''$ (where $\epsilon'' > 0$).
+    * Pass this as a `mfem::ComplexConstantCoefficient` to the physics class.
+    * Run the full `setup()`, `assemble()`, and `solve()`.
+    * **Check:** The eigenvalue $\lambda = k_c^2$ must now be complex.
+    * Assert that the imaginary part of the computed eigenvalue $\lambda_0$ is non-zero.
+* **Implementation:**
+    * `PhysicsWaveguide2DEigen` must be updated to handle `mfem::ComplexOperator`.
+    * The `assemble()` method must create complex-valued `ParBilinearForm`s.
+    * The `SolverEigenSlepc` must be configured for complex arithmetic.
 
-1.  **Testing:**
-      * **Checklist:**
-          * [ ] Run `tests/test_problem_abstraction.cpp`. It must pass.
-          * [ ] Run `tests/test_custom_fespace_injection.cpp`. It must pass.
-2.  **Refactoring (Guideline 7):**
-      * **Checklist:**
-          * [ ] Update `example/ex0_cylinder_dirichlet.cpp`.
-          * [ ] Update `example/ex1_cube_mixed_bc.cpp`.
-          * [ ] Update `example/ex3_transient_heat.cpp`.
-          * **Hint:** The only change in these files should be removing the `order` argument from the `Physics...` constructor (e.g., `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh, order);` becomes `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`).
-          * [ ] Verify all examples compile and run correctly.
-3.  **Documentation (Guideline 6, 22):**
-      * **Checklist:**
-          * [ ] Update Doxygen comments for all modified constructors and methods.
-          * [ ] Update `docs/hpcfem-doc/custom_fem_interfaces.md` to mark Part 1 as complete.
+---
 
------
+### **Phase 2: 3D Frequency-Domain (S-Parameter) Solver**
 
-### Part 2: Refactor Physics Modules for Integrator Injection
+**Files to Create:**
+* `src/hpcfem/physics/waveguide_port.hpp` (a helper class)
+* `src/hpcfem/physics/waveguide_port.cpp`
+* `src/hpcfem/physics/physics_waveguide_3d_freq.hpp`
+* `src/hpcfem/physics/physics_waveguide_3d_freq.cpp`
+* `src/hpcfem/physics/port_excitation_integrator.hpp` (custom integrator)
+* `tests/test_physics_waveguide_3d_freq.cpp`
 
-**Goal:** Refactor `PhysicsInterface` and children to *accept* user-created integrators, rather than hard-coding them in `setupOn`. This allows the user to provide standard MFEM integrators or their own custom-derived classes.
+**Documentation:**
+* Add new classes to `naming_registry.md`.
+* Create `docs/hpcfem-doc/physics_waveguide_3d_freq.md` explaining S-parameter simulation.
 
-#### Step 2.1: Planning
+#### **TDD Step-by-Step Construction:**
 
-  * **Analysis:** `Physics...::setupOn` methods hard-code the creation of coefficients (e.g., `epsilonCoeff`) and integrators (e.g., `mfem::DiffusionIntegrator`). This logic must be removed from the `Physics` modules and moved to the user-facing application (`example/` or `test/`).
-  * **Refactor Plan:**
-    1.  Create a new header `src/hpcfem/integrator_info.hpp` (Guideline 14, 24). This file will define structs to hold integrator pointers and their optional markers. (Guideline 4: No nested classes).
-    2.  **`src/hpcfem/integrator_info.hpp` content:**
-        ```cpp
-        #include "mfem.hpp"
-        #include <memory>
+**Step 2.1: Test Port Helper Class**
+* **Test:** `test_waveguide_port_initialization` (in `test_physics_waveguide_3d_freq.cpp` or a new file)
+    * This test must first run the **Phase 1 Solver** on a 2D port mesh to get the $TE_{10}$ mode (field and $\beta$).
+    * It then instantiates `hpcfem::WaveguidePort` with this modal solution.
+    * Assert that the port object correctly stores the modal field and propagation constant.
+* **Implementation:**
+    * Create `WaveguidePort` class. It stores the 2D `FiniteElementSpace`, the modal `GridFunction` $\vec{e}_1(x,y)$, and the complex propagation constant $\gamma_1 = \alpha + j\beta_1$.
 
-        namespace hpcfem {
+**Step 2.2: Test 3D Matrix Assembly ($[S] - k_0^2 [M]$)**
+* **Test:** `test_3d_system_matrix_assembly`
+    * Load a 3D mesh (e.g., `testmesh_cube.mesh`).
+    * Set up `PhysicsWaveguide3DFreq` with a frequency $k_0$.
+    * Call `assemble()`.
+    * **Check:** Assert that the final system matrix $[A]$ is a non-null `mfem::HypreParMatrix` and is complex.
+* **Implementation:**
+    * `PhysicsWaveguide3DFreq::assemble()` will create the complex system matrix:
+        * `s = new mfem::ParBilinearForm(fespace, mfem::ComplexOperator::HERMITIAN);`
+        * `s->AddDomainIntegrator(new mfem::CurlCurlIntegrator(muInvCoeff));`
+        * `m = new mfem::ParBilinearForm(fespace, mfem::ComplexOperator::HERMITIAN);`
+        * `m->AddDomainIntegrator(new mfem::VectorFEMassIntegrator(epsilonCoeff));`
+        * `s->Assemble(); m->Assemble();`
+        * `A = s + (-k0*k0)*m;` (Symbolic assembly)
+        * `A->Finalize();`
 
-        // Info struct for Bilinear Domain Integrators
-        struct BilinearIntegratorInfo {
-            std::unique_ptr<mfem::BilinearFormIntegrator> integrator;
-            std::unique_ptr<mfem::Array<int>> marker; // nullptr for all domains
-        };
+**Step 2.3: Test Port Excitation Vector $\{b\}$**
+* **Test:** `test_port_excitation_rhs`
+    * Load a 3D cube mesh. Designate one face (e.g., attribute 1) as Port 1.
+    * Create a `WaveguidePort` object (from 2.1) and assign it to attribute 1.
+    * Call `assembleRHS()` (or equivalent).
+    * **Check:**
+        1.  Get the assembled `mfem::HypreParVector` $\{b\}$.
+        2.  Assert that $\{b\}$ is non-zero.
+        3.  Manually check that the non-zero entries correspond *only* to DoFs on the port surface.
+* **Implementation:**
+    * `PhysicsWaveguide3DFreq::assembleRHS()` will create a `mfem::ParLinearForm`.
+    * You must create a custom integrator: `PortExcitationIntegrator : mfem::BoundaryLFIntegrator`.
+    * This integrator's `AssembleRHSElementVect` will take the $TE_{10}$ modal field $\vec{e}_1$ (as a `VectorCoefficient`) and compute the integral: $\int_{S_{p1}} \vec{W}_i \cdot (2 j \beta_1 Y_1 \vec{e}_1) dS$.
+    * Add this integrator to the `ParLinearForm`: `b->AddBoundaryIntegrator(new PortExcitationIntegrator(...), port1Attr);`
+    * `b->Assemble();`
 
-        // Info struct for Linear Domain Integrators
-        struct LinearIntegratorInfo {
-            std::unique_ptr<mfem::LinearFormIntegrator> integrator;
-            std::unique_ptr<mfem::Array<int>> marker; // nullptr for all domains
-        };
+**Step 2.4: Test Port Absorbing Boundary (on $[A]$)**
+* **Test:** `test_port_absorption_lhs`
+    * Use the same setup as 2.3.
+    * Call `assemble()` (which now must also assemble port BCs).
+    * **Check:** The assembled matrix $[A]$ must be different from the one in test 2.2.
+* **Implementation:**
+    * The port BC (first-order) adds an impedance term to the $[A]$ matrix:
+    * $\int_{S_p} \vec{W}_t \cdot (Y_1 \vec{E}_t) dS$ (where $Y_1$ is mode 1 impedance).
+    * `PhysicsWaveguide3DFreq::assemble()` must now *also* add this boundary term to the `s` or `m` form:
+    * `a->AddBoundaryIntegrator(new mfem::VectorFEMassIntegrator(portImpedanceCoeff), portAttr);`
+    * *Note:* A true modal absorbing boundary is more complex, but this $TE_{10}$-matched impedance is a valid TDD starting point.
 
-        // Info struct for Bilinear Boundary Integrators
-        struct BilinearBoundaryIntegratorInfo {
-            std::unique_ptr<mfem::BilinearFormIntegrator> integrator;
-            std::unique_ptr<mfem::Array<int>> marker; // MUST NOT be null
-        };
+**Step 2.5: Test S-Parameter Calculation (S11/S21)**
+* **Test:** `test_s_params_straight_waveguide_serial_and_parallel`
+    * **Problem:** A 3D mesh of a straight waveguide segment.
+    * **Setup:**
+        1.  Port 1 (e.g., attr 1, $z=0$) - Excite + Absorb.
+        2.  Port 2 (e.g., attr 2, $z=L$) - Absorb Only.
+        3.  PEC walls (e.g., attr 3).
+    * Run the full `setup()`, `assemble()`, `solve()`.
+    * Call a new `calculateSParameters()` post-processing function.
+    * **Check (Lossless Case):**
+        1.  Assert `abs(S11) < 1e-3` (low reflection).
+        2.  Assert `abs(abs(S21) - 1.0) < 1e-3` (low loss).
+        3.  Assert `abs(S11_mag_db) < -60.0`.
+    * This test *must* pass in serial and parallel.
+* **Implementation:**
+    * `PhysicsWaveguide3DFreq::solve()` will use a linear solver (e.g., `SolverHypreAmg` or PETSc) to solve $A\{e\} = \{b\}$ for the complex field $\{e\}$.
+    * Create `PhysicsWaveguide3DFreq::calculateSParameters()`.
+    * This function needs the total field solution `mfem::ParComplexGridFunction e_total`.
+    * **S11:**
+        1.  Project $e_{\text{total}}$ onto the $TE_{10}$ mode $\vec{e}_1$ at Port 1:
+            $C_1 = \text{project}(\vec{E}_{\text{total}}, \vec{e}_1, \text{Port 1})$.
+        2.  $S_{11} = C_1 - 1.0$ (since incident amplitude $a_1=1.0$).
+    * **S21:**
+        1.  Project $e_{\text{total}}$ onto the $TE_{10}$ mode $\vec{e}_1$ at Port 2:
+            $C_2 = \text{project}(\vec{E}_{\text{total}}, \vec{e}_1, \text{Port 2})$.
+        2.  $S_{21} = C_2$.
+    * The projection integral is: $C = (\int_{S_p} \vec{E}_{\text{total}} \cdot \vec{e}_1^* dS) / (\int_{S_p} \vec{e}_1 \cdot \vec{e}_1^* dS)$. You will need `mfem::BilinearForm` and `mfem::LinearForm` with `VectorFEMassIntegrator` on the *boundary* to compute these.
 
-        // Info struct for Linear Boundary Integrators
-        struct LinearBoundaryIntegratorInfo {
-            std::unique_ptr<mfem::LinearFormIntegrator> integrator;
-            std::unique_ptr<mfem::Array<int>> marker; // MUST NOT be null
-        };
-
-        } // namespace hpcfem
-        ```
-    3.  Modify `src/hpcfem/physics_interface.hpp`:
-          * `#include "hpcfem/integrator_info.hpp"`.
-          * Add `protected` vectors to store the integrators:
-              * `std::vector<hpcfem::BilinearIntegratorInfo> bilinearIntegrators;`
-              * `std::vector<hpcfem::LinearIntegratorInfo> linearIntegrators;`
-              * `std::vector<hpcfem::BilinearBoundaryIntegratorInfo> bilinearBoundaryIntegrators;`
-              * `std::vector<hpcfem::LinearBoundaryIntegratorInfo> linearBoundaryIntegrators;`
-          * Add `public virtual` methods to add integrators:
-              * `virtual void addBilinearIntegrator(std::unique_ptr<mfem::BilinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker = nullptr);`
-              * `virtual void addLinearIntegrator(std::unique_ptr<mfem::LinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker = nullptr);`
-              * `virtual void addBilinearBoundaryIntegrator(std::unique_ptr<mfem::BilinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker);`
-              * `virtual void addLinearBoundaryIntegrator(std::unique_ptr<mfem::LinearFormIntegrator> integ, std::unique_ptr<mfem::Array<int>> marker);`
-    4.  Modify `src/hpcfem/physics_interface.cpp`: Implement these `add...` methods. They just construct the appropriate `...Info` struct and `std::move` the `unique_ptr`s into the correct `std::vector`.
-    5.  Modify `PhysicsElectrostatics` (and `PhysicsThermal`):
-          * **`hpp`:** Remove all `set...` methods (`setEpsilon`, `setSource`, `setNeumann`, `setDirichlet`). Remove all `mfem::Coefficient*`, `mfem::Vector*`, and marker `mfem::Array<int>` members.
-          * **`cpp`:**
-              * Update constructor: Remove all coefficient and marker initialization.
-              * Update `setupOn`: Remove *all* `new ...Integrator` and `new ...Coefficient` lines.
-              * **Implement New Logic in `setupOn`:**
-                ```cpp
-                // This logic MUST follow the Part 1 refactor
-                delete a; a = new mfem::ParBilinearForm(this->fespace);
-                delete b; b = new mfem::ParLinearForm(this->fespace);
-
-                // Add domain bilinear integrators
-                for (auto &info : bilinearIntegrators) {
-                    if (info.marker == nullptr) {
-                        a->AddDomainIntegrator(info.integrator.release()); // MFEM takes ownership
-                    } else {
-                        a->AddDomainIntegrator(info.integrator.release(), *info.marker);
-                    }
-                }
-                bilinearIntegrators.clear(); // Clear vector of now-null ptrs
-
-                // ... Repeat for linearIntegrators on b ...
-                linearIntegrators.clear();
-
-                // ... Repeat for bilinearBoundaryIntegrators on a ...
-                bilinearBoundaryIntegrators.clear();
-
-                // ... Repeat for linearBoundaryIntegrators on b ...
-                linearBoundaryIntegrators.clear();
-                ```
-                **Note:** This implementation (`release()` and `clear()`) means `setupOn` is a one-time operation. This is correct and MFEM-compliant, as the forms take ownership of the integrator pointers.
-
-#### Step 2.2: Write Failing Tests
-
-1.  **Modify `tests/test_problem_abstraction.cpp`:**
-      * **Hint:** This test will fail to compile as all `set...` methods are gone.
-      * **New Test Logic:**
-          * [ ] `auto physics = std::make_unique<hpcfem::PhysicsElectrostatics>(*pmesh);`
-          * [ ] Create coefficients: `auto *epsCoeff = new mfem::ConstantCoefficient(1.0);`
-          * [ ] Create integrators: `auto diffInteg = std::make_unique<mfem::DiffusionIntegrator>(*epsCoeff);`
-          * [ ] Add integrators: `physics->addBilinearIntegrator(std::move(diffInteg));`
-          * [ ] **(Repeat for a source term)** `auto *srcCoeff = new mfem::ConstantCoefficient(1.0);`
-          * [ ] `auto srcInteg = std::make_unique<mfem::DomainLFIntegrator>(*srcCoeff);`
-          * [ ] `physics->addLinearIntegrator(std::move(srcInteg));`
-          * [ ] Add `physics` to `problem`, `setup`, `solve`, and assert a non-zero solution.
-      * This test fails until Step 2.3 is complete.
-2.  **Create New Test: `tests/test_custom_integrator.cpp`**
-      * **Hint:** As requested, check MFEM implementation (e.g., `fem/integ.hpp`) to see base classes.
-      * **Custom Class Definition (in the test file):**
-        ```cpp
-        // Test class that scales a mass matrix.
-        class MyTestIntegrator : public mfem::BilinearFormIntegrator {
-        private:
-            mfem::ConstantCoefficient scale;
-        public:
-            explicit MyTestIntegrator(double s) : scale(s) {}
-            void AssembleElementMatrix(const mfem::FiniteElement &el,
-                                       mfem::ElementTransformation &Tr,
-                                       mfem::DenseMatrix &elmat) override {
-                mfem::MassIntegrator massInteg;
-                massInteg.AssembleElementMatrix(el, Tr, elmat);
-                elmat *= scale.constant;
-            }
-        };
-        ```
-      * **Test Logic:**
-          * [ ] Setup a `FemProblem` with `PhysicsElectrostatics` (as in the test above).
-          * [ ] Add the custom integrator: `auto customInteg = std::make_unique<MyTestIntegrator>(123.0);`
-          * [ ] `physics->addBilinearIntegrator(std::move(customInteg));`
-          * [ ] Add a source term, setup, and solve. Store the result `x_custom`.
-          * [ ] **Verification:** Setup a *second* `FemProblem` (`problem2`).
-          * [ ] Add a *standard* `mfem::MassIntegrator` with a coefficient of 123.0.
-          * [ ] `auto *coeff = new mfem::ConstantCoefficient(123.0);`
-          * [ ] `auto massInteg = std::make_unique<mfem::MassIntegrator>(*coeff);`
-          * [ ] `physics2->addBilinearIntegrator(std::move(massInteg));`
-          * [ ] Add the *same* source term, setup, and solve. Store the result `x_standard`.
-          * [ ] **Assertion:** `ASSERT(mfem::Distance(x_custom, x_standard) < 1.e-12)`.
-      * This test fails until Step 2.3 is complete.
-
-#### Step 2.3: Implementation
-
-  * **Checklist:**
-      * [ ] Create and implement `src/hpcfem/integrator_info.hpp` as planned.
-      * [ ] Modify `src/hpcfem/physics_interface.hpp` (add vectors and `add...` methods) as planned.
-      * [ ] Implement `src/hpcfem/physics_interface.cpp` (`add...` methods) as planned.
-      * [ ] Modify `src/hpcfem/physics_electrostatics.hpp / .cpp` (remove `set...`, coefficients, update `setupOn`) as planned.
-      * [ ] Modify `src/hpcfem/physics_thermal.hpp / .cpp` (remove `set...`, coefficients, update `setupOn`) as planned.
-
-#### Step 2.4: Testing, Refactoring, and Documentation
-
-1.  **Testing:**
-      * **Checklist:**
-          * [ ] Run `tests/test_problem_abstraction.cpp`. It must pass.
-          * [ ] Run `tests/test_custom_integrator.cpp`. It must pass.
-2.  **Refactoring (Guideline 7):**
-      * **Checklist:**
-          * [ ] **Completely rewrite `example/ex0`, `ex1`, and `ex3`.**
-          * [ ] **Hint:** These files are now the *user's* responsibility. They must manually create all `mfem::Coefficient`s (for epsilon, source, etc.), create all `mfem::...Integrator`s, and add them to the `physics` module using the new `add...Integrator` methods *before* calling `problem->addPhysics()`.
-          * [ ] Verify all examples compile and run correctly.
-3.  **Documentation (Guideline 5, 6, 22):**
-      * **Checklist:**
-          * [ ] Add new `struct` and method names to `docs/hpcfem-doc/naming_registry.md`.
-          * [ ] Add Doxygen comments for all new `struct`s and `add...` methods.
-          * [ ] Create `docs/mfem-basic-usage/user_defined_physics.md` explaining the new workflow (create fespace -\> create problem -\> create physics -\> create coeffs -\> create integrators -\> add integrators -\> add physics -\> setup -\> solve).
-          * [ ] Update `docs/hpcfem-doc/custom_fem_interfaces.md` to mark Part 2 as complete.
-
------
-
-### Part 3: Parallel and Stress Testing (Guideline 10, 25)
-
-**Goal:** Ensure the new, flexible design works correctly with MPI and scales to large problems.
-
-#### Step 3.1: Write Failing Test (Parallel)
-
-1.  **Create New Test: `tests/test_parallel_custom_integrator.cpp`**
-      * **Checklist:**
-          * [ ] Copy `tests/test_custom_integrator.cpp`.
-          * [ ] **Hint:** This test *must* be runnable with `mpirun -np N ...`.
-          * [ ] The test *must* initialize MPI (`mfem::Mpi::Init();`).
-          * [ ] The test must use `mfem::ParMesh`, `mfem::ParFiniteElementSpace`, and `hpcfem::FemProblem`.
-          * [ ] The test logic (comparing `MyTestIntegrator` to a standard `MassIntegrator`) remains identical.
-          * [ ] **Assertion:** The parallel solution comparison `mfem::Distance(x_custom, x_standard)` must be `< 1.e-12` when run on 2, 4, or more processors.
-      * This test will fail if any assumptions made in the refactoring were not parallel-safe.
-
-#### Step 3.2: Implementation (Bug Fixes)
-
-  * **Checklist:**
-      * [ ] Run the `test_parallel_custom_integrator` with `mpirun -np 4`.
-      * [ ] **Implementation:** No new code is expected. This step is purely for *fixing* any parallel bugs exposed by the test. The new design should be inherently parallel-safe as it relies on MFEM's parallel forms (`ParBilinearForm`, etc.), and the integrators are assembled element-wise.
-
-#### Step 3.3: Stress Test
-
-1.  **Create New Benchmark: `benchmark/poisson_scaling_femproblem/main.cpp`**
-      * **Checklist:**
-          * [ ] Create a new benchmark executable (add to `benchmark/CMakeLists.txt`).
-          * [ ] This benchmark will mimic `benchmark/poisson_scaling`, but will use the newly refactored `FemProblem` and `PhysicsElectrostatics`.
-          * [ ] The `main` function should contain a loop over `ref_levels`.
-          * [ ] **Inside the loop:**
-              * [ ] Create `pmesh` and refine it.
-              * [ ] Create `fespace` (e.g., H1).
-              * [ ] Create `problem` (FemProblem).
-              * [ ] Create `physics` (PhysicsElectrostatics).
-              * [ ] Create `coeff` and `integ` (e.g., `DiffusionIntegrator`).
-              * [ ] `physics->addBilinearIntegrator(...)`.
-              * [ ] (Add source term integrator).
-              * [ ] `problem->addPhysics(physics.get());`
-              * [ ] `problem->setup();`
-              * [ ] `problem->solve();`
-          * [ ] Run this benchmark with MPI (`mpirun`) and increase `ref_levels` until the DoFs exceed 1e7 (Guideline 10).
-      * **Goal:** The test passes if it completes all refinement levels without crashing or producing errors.
-
-#### Step 3.4: Final Documentation and Merge
-
-  * **Checklist:**
-      * [ ] (Guideline 7) Ensure *all* tests, examples, and benchmarks compile and run.
-      * [ ] (Guideline 6) Ensure all new code has clean Doxygen comments.
-      * [ ] (Guideline 22) Finalize `docs/hpcfem-doc/custom_fem_interfaces.md`.
-      * [ ] (Guideline 8) Search the branch for any `TODO`s added and resolve them.
-      * [ ] (Guideline 9) Merge the `feature/custom_fem_interfaces` branch into `dev` and delete the feature branch.
+**Step 2.6: Final Refactor and Stress Test**
+* **Test:** `test_discontinuity_power_conservation`
+    * **Problem:** A 3D waveguide with a dielectric block or iris (a real device).
+    * **Check (Lossless):** Assert that $|S_{11}|^2 + |S_{21}|^2$ is within tolerance of $1.0$.
+* **Stress Test:**
+    * Rerun `test_s_params_discontinuity` on a mesh with >1M DoFs.
+    * Rerun in parallel on >16 cores.
+    * The test must still pass, and memory usage should be reasonable.
+* **Refactor:** Clean up all code, ensure all Doxygen comments are complete, and clear all `TODO`s before merging to `dev`.
