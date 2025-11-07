@@ -42,6 +42,12 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
   - **Extends:** `mfem::Coefficient`
   - **Formula:** Q = σ|∇V|²
   - **Purpose:** Evaluates nonlinear Joule heating power density at quadrature points
+
+- `PhysicsWaveguideEigen` - 3D Maxwell eigenvalue problem solver (src/hpcfem/physics/physics_waveguide_eigen.hpp/cpp)
+  - **Purpose:** Solves ∇×∇×E = λE for electromagnetic cavity modes
+  - **Equation:** Maxwell eigenvalue problem with PEC boundaries
+  - **Key Feature:** Uses Nedelec elements and HypreAMS preconditioner
+  - **Application:** Waveguide mode analysis, S-parameter port definitions
   
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
@@ -83,6 +89,8 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `src/hpcfem/physics/physics_thermal.hpp` - Thermal diffusion physics header
 - `src/hpcfem/physics/physics_thermal.cpp` - Thermal diffusion physics implementation
 - `src/hpcfem/physics/physics_joule_heating.hpp` - Joule heating coupled physics header
+- `src/hpcfem/physics/physics_waveguide_eigen.hpp` - 3D Maxwell eigenvalue solver header
+- `src/hpcfem/physics/physics_waveguide_eigen.cpp` - 3D Maxwell eigenvalue solver implementation
 
 ### Solver Modules
 
@@ -109,6 +117,7 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
 - `tests/test_physics_coupling.cpp` - Coupled physics test
 - `tests/test_physics_joule_heating_block.cpp` - Joule heating BlockOperator assembly test
+- `tests/test_physics_waveguide_eigen.cpp` - 3D Maxwell eigenvalue problem test
 
 ### Examples
 

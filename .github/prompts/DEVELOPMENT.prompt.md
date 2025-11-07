@@ -2,200 +2,426 @@
 mode: agent
 ---
 
-### **TDD Development Plan: General Waveguide Simulation Tool**
+# TDD Plan: General Waveguide Simulation Tool
 
-**Objective:** To create a general, robust, and parallel-capable tool for electromagnetic waveguide simulation within the `hpcfem` project. This tool will be developed in two main phases, both strictly following TDD.
+**Project:** `hpc-fem-playground`
+**Branch Name:** `feature/waveguide_toolkit`
+**Goal:** To build a general, 3D, frequency-domain tool for waveguide simulation (S-Parameters) using MFEM's vector finite elements (Nedelec/edge elements).
 
-1.  **Phase 1: 2D Eigenmode Solver:** Solves for the modal propagation constants (e.g., $k_c$, $\gamma$) and 2D vector field profiles (e.g., $TE_{10}$) on a waveguide cross-section. This is the foundation for the 3D solver's ports.
-2.  **Phase 2: 3D Frequency-Domain (S-Parameter) Solver:** Solves the full 3D vector Helmholtz equation for a driven problem to calculate S-parameters.
+This plan follows the TDD workflow (Rule \#10: PLANNING -\> TESTS -\> IMPLEMENTING -\> ...).
 
----
+-----
 
-### **Phase 1: 2D Vector Eigenmode Solver**
+## Step 1: The Core Physics - Waveguide Eigenvalue Problem
 
-**Files to Create:**
-* `src/hpcfem/physics/physics_waveguide_2d_eigen.hpp`
-* `src/hpcfem/physics/physics_waveguide_2d_eigen.cpp`
-* `tests/test_physics_waveguide_2d_eigen.cpp`
+**1. Planning:**
+Before we can solve a *driven* problem for S-parameters, we must be able to solve the *eigenvalue* problem. This will:
 
-**Documentation:**
-* Add `hpcfem::PhysicsWaveguide2DEigen` to `docs/hpcfem-doc/naming_registry.md`.
-* Create `docs/hpcfem-doc/physics_waveguide_2d_eigen.md` explaining the physics and usage.
+1.  Verify our use of vector finite elements (`ND_FECollection`) is correct.
+2.  Prove we have eliminated the spurious mode (non-positive-definite matrix) problem, as discussed.
+3.  Give us the "basis" (the modes) we will need later for port definitions.
 
-#### **TDD Step-by-Step Construction:**
+We will solve the 2D eigenvalue problem for the transverse magnetic field $\mathbf{H}_t$ on a rectangular waveguide cross-section. The equation is $\nabla_t \times (\frac{1}{\epsilon_r} \nabla_t \times \mathbf{H}_t) = k_c^2 \mu_r \mathbf{H}_t$, where $k_c$ is the cutoff wavenumber (the eigenvalue).
 
-**Step 1.1: Stub Class and Basic Test**
-* **Test:** `test_class_instantiation`
-    * Write a test in `test_physics_waveguide_2d_eigen.cpp` that includes the new header.
-    * The test will instantiate `hpcfem::PhysicsWaveguide2DEigen`.
-    * Assert that the pointer is not null.
-* **Implementation:**
-    * Create the stub `PhysicsWaveguide2DEigen` class in its `.hpp`/`.cpp` files.
-    * It must inherit from the `hpcfem::PhysicsInterface`.
-    * Implement empty virtual functions (e.g., `setup()`, `assemble()`, `solve()`).
+**2. Test (WRITE THIS FIRST):**
+Create a new file: `tests/test_physics_waveguide_eigen.cpp`
 
-**Step 1.2: Test 2D $H(curl)$ Space and PEC Boundary**
-* **Test:** `test_nd_space_and_pec_boundary`
-    * Load a 2D mesh (e.g., a simple 4-element rectangle).
-    * Define a boundary attribute for the outer wall (e.g., attribute 1).
-    * The test will:
-        1.  Initialize the `PhysicsWaveguide2DEigen` and call its `setup()` method, passing in the mesh and the PEC boundary attribute.
-        2.  Assert that the internal `FiniteElementSpace` is *not* null.
-        3.  Assert that the space is of type `mfem::FiniteElementCollection::NEDELEC_FE`.
-        4.  Assert that the `FiniteElementSpace::GetEssentialTrueDofs()` list is non-empty and contains the correct number of edge DoFs corresponding to the outer boundary.
-* **Implementation:**
-    * In `PhysicsWaveguide2DEigen::setup()`, create and store a `mfem::ParFiniteElementSpace`.
-    * Use an `mfem::ND_FECollection` (Nedelec $H(curl)$ elements).
-    * Store the PEC boundary attribute list (`mfem::Array<int>`).
-    * Call `fespace->GetEssentialTrueDofs(pecBdr, essTDoFs)`.
+```cpp
+// in tests/test_physics_waveguide_eigen.cpp
+#include "gtest/gtest.h"
+#include "mfem.hpp"
+#include "hpcfem/physics/physics_waveguide_eigen.hpp"
+#include "hpcfem/core/fem_problem.hpp"
 
-**Step 1.3: Test Bilinear Form Assembly (Lossless Case)**
-* **Test:** `test_eigen_matrix_assembly_lossless`
-    * Use a known 2x1 mesh.
-    * Call the `assemble()` method.
-    * The test must get the assembled operators (A and B).
-    * Assert that both `mfem::HypreParMatrix` pointers (for A and B) are not null.
-    * Assert that their dimensions are correct (equal to `fespace->GetTrueVSize()`).
-    * **Physics:** We are solving $\nabla_t \times (\mu_r^{-1} \nabla_t \times \vec{E}_t) = k_c^2 \epsilon_r \vec{E}_t$.
-* **Implementation:**
-    * `assemble()` will create two `mfem::ParBilinearForm`s: `a` and `b`.
-    * `a->AddDomainIntegrator(new mfem::CurlCurlIntegrator(muInvCoeff));` (This is $[S_t]$).
-    * `b->AddDomainIntegrator(new mfem::VectorFEMassIntegrator(epsilonCoeff));` (This is $[T_t]$).
-    * `a->Assemble()` and `b->Assemble()`.
-    * Finalize the operators using `a->ParallelAssemble()` and `b->ParallelAssemble()`, and apply essential BCs.
+#include <string>
+#include <vector>
+#include <cmath>
 
-**Step 1.4: Test Eigenvalue Solution (Lossless $TE_{10}$)**
-* **Test:** `test_te10_cutoff_frequency_serial_and_parallel`
-    * Load a mesh of a standard rectangular waveguide (e.g., WR-90, width `a = 22.86e-3` m).
-    * Run the full `setup()`, `assemble()`, and `solve()`.
-    * **Check:** The analytical cutoff wavenumber is $k_c = \pi / a$. The eigenvalue $\lambda$ from the solver is $k_c^2$.
-    * The test must:
-        1.  Call `solve()` and get the lowest eigenvalue $\lambda_0$.
-        2.  Calculate the expected $\lambda_{exp} = (\pi / 0.02286)^2$.
-        3.  Assert that `abs(lambda_0 - lambda_exp) < 1e-3`.
-    * This test *must* be run in serial (`mpirun -n 1 ...`) and parallel (`mpirun -n 4 ...`) and pass both.
-* **Implementation:**
-    * You will need an eigenvalue solver. Add `src/hpcfem/solvers/solver_eigen_slepc.hpp` (or similar) that wraps the SLEPc library.
-    * `PhysicsWaveguide2DEigen::solve()` will call this solver to solve $A\{e\} = \lambda B\{e\}$.
-    * The solver should return the computed eigenvalues.
+// Test case for Rule #10 and #20
+TEST(PhysicsWaveguideEigen, test_rectangular_waveguide_cutoff) {
+    // 1. Setup the problem
+    constexpr int dim = 2;
+    constexpr int order = 1;
+    std::string meshFile = "../testdata/testmesh_rectangle_2d.mesh"; // TODO: Create this 2D mesh
+    
+    // Waveguide dimensions (e.g., WR-90)
+    constexpr double a = 2.286e-2; // meters
+    constexpr double b = 1.016e-2; // meters
+    constexpr int numModes = 5;
 
-**Step 1.5: Test Lossy Media (Complex Eigenvalue)**
-* **Test:** `test_lossy_waveguide_complex_kc`
-    * Use the same WR-90 mesh.
-    * In the test, define a *complex* permittivity $\epsilon_r = \epsilon' - j\epsilon''$ (where $\epsilon'' > 0$).
-    * Pass this as a `mfem::ComplexConstantCoefficient` to the physics class.
-    * Run the full `setup()`, `assemble()`, and `solve()`.
-    * **Check:** The eigenvalue $\lambda = k_c^2$ must now be complex.
-    * Assert that the imaginary part of the computed eigenvalue $\lambda_0$ is non-zero.
-* **Implementation:**
-    * `PhysicsWaveguide2DEigen` must be updated to handle `mfem::ComplexOperator`.
-    * The `assemble()` method must create complex-valued `ParBilinearForm`s.
-    * The `SolverEigenSlepc` must be configured for complex arithmetic.
+    // 2. Create the FEM problem
+    hpcfem::FemProblem problem(dim, order, meshFile);
+    
+    // 3. Create and set the physics
+    hpcfem::PhysicsWaveguideEigen physics(problem.getMesh());
+    problem.setPhysics(&physics);
+    
+    // 4. Solve the eigenvalue problem
+    // TODO: The physics object will need a 'solve' method that returns eigenvalues
+    std::vector<double> kcSq = physics.solve(numModes); // Solves for eigenvalues (k_c^2)
 
----
+    // 5. Assertions: Check against analytical solution
+    // k_c^2 = (m*pi/a)^2 + (n*pi/b)^2
+    // We expect the first few modes to be TE10, TE20, TE01, TE30, TE11 (or similar)
+    // Note: FEM solvers find them in ascending order, not by (m,n) index.
+    
+    constexpr double PI = 3.141592653589793;
+    std::vector<double> kcSqAnalytical;
+    kcSqAnalytical.push_back(std::pow(1*PI/a, 2) + std::pow(0*PI/b, 2)); // TE10
+    kcSqAnalytical.push_back(std::pow(2*PI/a, 2) + std::pow(0*PI/b, 2)); // TE20
+    kcSqAnalytical.push_back(std::pow(0*PI/a, 2) + std::pow(1*PI/b, 2)); // TE01
+    kcSqAnalytical.push_back(std::pow(3*PI/a, 2) + std::pow(0*PI/b, 2)); // TE30
+    kcSqAnalytical.push_back(std::pow(1*PI/a, 2) + std::pow(1*PI/b, 2)); // TE11
+    
+    std::sort(kcSqAnalytical.begin(), kcSqAnalytical.end());
+    
+    ASSERT_EQ(kcSq.size(), numModes);
 
-### **Phase 2: 3D Frequency-Domain (S-Parameter) Solver**
+    // Check with a tolerance (e.g., 1%)
+    for (int i = 0; i < numModes; ++i) {
+        ASSERT_NEAR(kcSq[i], kcSqAnalytical[i], kcSqAnalytical[i] * 0.01);
+    }
+}
 
-**Files to Create:**
-* `src/hpcfem/physics/waveguide_port.hpp` (a helper class)
-* `src/hpcfem/physics/waveguide_port.cpp`
-* `src/hpcfem/physics/physics_waveguide_3d_freq.hpp`
-* `src/hpcfem/physics/physics_waveguide_3d_freq.cpp`
-* `src/hpcfem/physics/port_excitation_integrator.hpp` (custom integrator)
-* `tests/test_physics_waveguide_3d_freq.cpp`
+// TODO: Add a test_parallel_eigenvalue_cutoff (Rule #25)
+// This test would run the same problem with MPI and verify the results are identical.
+```
 
-**Documentation:**
-* Add new classes to `naming_registry.md`.
-* Create `docs/hpcfem-doc/physics_waveguide_3d_freq.md` explaining S-parameter simulation.
+**3. Implementation (TO PASS THE TEST):**
+Create `src/hpcfem/physics/physics_waveguide_eigen.hpp` and `.cpp` (Rule \#17, \#16).
 
-#### **TDD Step-by-Step Construction:**
+```cpp
+// in src/hpcfem/physics/physics_waveguide_eigen.hpp
+#pragma once
+#include "mfem.hpp"
+#include "hpcfem/core/physics_interface.hpp"
+#include <vector>
 
-**Step 2.1: Test Port Helper Class**
-* **Test:** `test_waveguide_port_initialization` (in `test_physics_waveguide_3d_freq.cpp` or a new file)
-    * This test must first run the **Phase 1 Solver** on a 2D port mesh to get the $TE_{10}$ mode (field and $\beta$).
-    * It then instantiates `hpcfem::WaveguidePort` with this modal solution.
-    * Assert that the port object correctly stores the modal field and propagation constant.
-* **Implementation:**
-    * Create `WaveguidePort` class. It stores the 2D `FiniteElementSpace`, the modal `GridFunction` $\vec{e}_1(x,y)$, and the complex propagation constant $\gamma_1 = \alpha + j\beta_1$.
+namespace hpcfem {
 
-**Step 2.2: Test 3D Matrix Assembly ($[S] - k_0^2 [M]$)**
-* **Test:** `test_3d_system_matrix_assembly`
-    * Load a 3D mesh (e.g., `testmesh_cube.mesh`).
-    * Set up `PhysicsWaveguide3DFreq` with a frequency $k_0$.
-    * Call `assemble()`.
-    * **Check:** Assert that the final system matrix $[A]$ is a non-null `mfem::HypreParMatrix` and is complex.
-* **Implementation:**
-    * `PhysicsWaveguide3DFreq::assemble()` will create the complex system matrix:
-        * `s = new mfem::ParBilinearForm(fespace, mfem::ComplexOperator::HERMITIAN);`
-        * `s->AddDomainIntegrator(new mfem::CurlCurlIntegrator(muInvCoeff));`
-        * `m = new mfem::ParBilinearForm(fespace, mfem::ComplexOperator::HERMITIAN);`
-        * `m->AddDomainIntegrator(new mfem::VectorFEMassIntegrator(epsilonCoeff));`
-        * `s->Assemble(); m->Assemble();`
-        * `A = s + (-k0*k0)*m;` (Symbolic assembly)
-        * `A->Finalize();`
+/**
+ * @brief Solves the 2D eigenvalue problem for waveguide modes.
+ * @details This class solves the vector wave equation for the
+ * transverse H-field (TE modes) or E-field (TM modes) to find
+ * the cutoff wavenumbers (eigenvalues) and mode shapes (eigenvectors).
+ * This is the foundation for port definitions.
+ */
+class PhysicsWaveguideEigen : public PhysicsInterface {
+public:
+    explicit PhysicsWaveguideEigen(mfem::Mesh& mesh);
+    virtual ~PhysicsWaveguideEigen() = default;
 
-**Step 2.3: Test Port Excitation Vector $\{b\}$**
-* **Test:** `test_port_excitation_rhs`
-    * Load a 3D cube mesh. Designate one face (e.g., attribute 1) as Port 1.
-    * Create a `WaveguidePort` object (from 2.1) and assign it to attribute 1.
-    * Call `assembleRHS()` (or equivalent).
-    * **Check:**
-        1.  Get the assembled `mfem::HypreParVector` $\{b\}$.
-        2.  Assert that $\{b\}$ is non-zero.
-        3.  Manually check that the non-zero entries correspond *only* to DoFs on the port surface.
-* **Implementation:**
-    * `PhysicsWaveguide3DFreq::assembleRHS()` will create a `mfem::ParLinearForm`.
-    * You must create a custom integrator: `PortExcitationIntegrator : mfem::BoundaryLFIntegrator`.
-    * This integrator's `AssembleRHSElementVect` will take the $TE_{10}$ modal field $\vec{e}_1$ (as a `VectorCoefficient`) and compute the integral: $\int_{S_{p1}} \vec{W}_i \cdot (2 j \beta_1 Y_1 \vec{e}_1) dS$.
-    * Add this integrator to the `ParLinearForm`: `b->AddBoundaryIntegrator(new PortExcitationIntegrator(...), port1Attr);`
-    * `b->Assemble();`
+    /**
+     * @brief Assembles the FEM matrices for the eigenvalue problem.
+     * @details Implements the weak form: (1/er * curl(H_t), curl(v)) = k_c^2 * (ur * H_t, v)
+     */
+    void setup() override;
 
-**Step 2.4: Test Port Absorbing Boundary (on $[A]$)**
-* **Test:** `test_port_absorption_lhs`
-    * Use the same setup as 2.3.
-    * Call `assemble()` (which now must also assemble port BCs).
-    * **Check:** The assembled matrix $[A]$ must be different from the one in test 2.2.
-* **Implementation:**
-    * The port BC (first-order) adds an impedance term to the $[A]$ matrix:
-    * $\int_{S_p} \vec{W}_t \cdot (Y_1 \vec{E}_t) dS$ (where $Y_1$ is mode 1 impedance).
-    * `PhysicsWaveguide3DFreq::assemble()` must now *also* add this boundary term to the `s` or `m` form:
-    * `a->AddBoundaryIntegrator(new mfem::VectorFEMassIntegrator(portImpedanceCoeff), portAttr);`
-    * *Note:* A true modal absorbing boundary is more complex, but this $TE_{10}$-matched impedance is a valid TDD starting point.
+    /**
+     * @brief Solves the generalized eigenvalue problem [A]{x} = lambda [B]{x}.
+     * @param numModes The number of eigenvalues to solve for.
+     * @return A vector of eigenvalues (k_c^2).
+     */
+    std::vector<double> solve(int numModes);
 
-**Step 2.5: Test S-Parameter Calculation (S11/S21)**
-* **Test:** `test_s_params_straight_waveguide_serial_and_parallel`
-    * **Problem:** A 3D mesh of a straight waveguide segment.
-    * **Setup:**
-        1.  Port 1 (e.g., attr 1, $z=0$) - Excite + Absorb.
-        2.  Port 2 (e.g., attr 2, $z=L$) - Absorb Only.
-        3.  PEC walls (e.g., attr 3).
-    * Run the full `setup()`, `assemble()`, `solve()`.
-    * Call a new `calculateSParameters()` post-processing function.
-    * **Check (Lossless Case):**
-        1.  Assert `abs(S11) < 1e-3` (low reflection).
-        2.  Assert `abs(abs(S21) - 1.0) < 1e-3` (low loss).
-        3.  Assert `abs(S11_mag_db) < -60.0`.
-    * This test *must* pass in serial and parallel.
-* **Implementation:**
-    * `PhysicsWaveguide3DFreq::solve()` will use a linear solver (e.g., `SolverHypreAmg` or PETSc) to solve $A\{e\} = \{b\}$ for the complex field $\{e\}$.
-    * Create `PhysicsWaveguide3DFreq::calculateSParameters()`.
-    * This function needs the total field solution `mfem::ParComplexGridFunction e_total`.
-    * **S11:**
-        1.  Project $e_{\text{total}}$ onto the $TE_{10}$ mode $\vec{e}_1$ at Port 1:
-            $C_1 = \text{project}(\vec{E}_{\text{total}}, \vec{e}_1, \text{Port 1})$.
-        2.  $S_{11} = C_1 - 1.0$ (since incident amplitude $a_1=1.0$).
-    * **S21:**
-        1.  Project $e_{\text{total}}$ onto the $TE_{10}$ mode $\vec{e}_1$ at Port 2:
-            $C_2 = \text{project}(\vec{E}_{\text{total}}, \vec{e}_1, \text{Port 2})$.
-        2.  $S_{21} = C_2$.
-    * The projection integral is: $C = (\int_{S_p} \vec{E}_{\text{total}} \cdot \vec{e}_1^* dS) / (\int_{S_p} \vec{e}_1 \cdot \vec{e}_1^* dS)$. You will need `mfem::BilinearForm` and `mfem::LinearForm` with `VectorFEMassIntegrator` on the *boundary* to compute these.
+    // TODO: Add methods to get the eigenvectors (mode shapes)
 
-**Step 2.6: Final Refactor and Stress Test**
-* **Test:** `test_discontinuity_power_conservation`
-    * **Problem:** A 3D waveguide with a dielectric block or iris (a real device).
-    * **Check (Lossless):** Assert that $|S_{11}|^2 + |S_{21}|^2$ is within tolerance of $1.0$.
-* **Stress Test:**
-    * Rerun `test_s_params_discontinuity` on a mesh with >1M DoFs.
-    * Rerun in parallel on >16 cores.
-    * The test must still pass, and memory usage should be reasonable.
-* **Refactor:** Clean up all code, ensure all Doxygen comments are complete, and clear all `TODO`s before merging to `dev`.
+protected:
+    void assembleA() override;
+    void assembleB() override; // 'B' here is the mass matrix [M]
+
+    // ND (Nedelec) collection for vector fields (Rule #20)
+    mfem::ND_FECollection feCollection;
+    mfem::FiniteElementSpace feSpace;
+
+    // A = Stiffness Matrix (CurlCurl)
+    mfem::BilinearForm a;
+    // B = Mass Matrix
+    mfem::BilinearForm b; 
+    
+    // TODO: Add support for SLEPc or ARPACK for eigenvalue solution
+};
+
+} // namespace hpcfem
+```
+
+  * **Implementation Note:** The `solve` method will interface with an eigensolver (like SLEPc, as used in MFEM's examples). You will assemble the `CurlCurl` integrator for matrix `a` and the `VectorFEMass` integrator for matrix `b`. The key is using `mfem::ND_FECollection`.
+
+-----
+
+## Step 2: The Driven Problem - Terminated Waveguide (ABC)
+
+**1. Planning:**
+Now we move to a 3D, *driven*, *complex-valued* problem. This is the vector Helmholtz equation: $\nabla \times (\frac{1}{\mu_r} \nabla \times \mathbf{E}) - k_0^2 \epsilon_r \mathbf{E} = 0$.
+
+We will simulate a simple, straight rectangular waveguide.
+
+  * **Source:** We'll use a simple current sheet to launch a wave.
+  * **Walls:** PEC boundary conditions ($\mathbf{E} \times \mathbf{n} = 0$).
+  * **Termination:** We will implement a simple Absorbing Boundary Condition (ABC) at the output port. This directly addresses the "terminated boundary" and "complex-value solving" problems.
+
+**2. Test (WRITE THIS FIRST):**
+Create a new file: `tests/test_physics_waveguide_driven.cpp`
+
+```cpp
+// in tests/test_physics_waveguide_driven.cpp
+#include "gtest/gtest.h"
+#include "mfem.hpp"
+#include "hpcfem/physics/physics_waveguide_driven.hpp"
+#include "hpcfem/core/fem_problem.hpp"
+
+// Test for complex-valued driven problem with ABC termination
+TEST(PhysicsWaveguideDriven, test_waveguide_abc_termination) {
+    // 1. Setup the problem
+    constexpr int dim = 3;
+    constexpr int order = 1;
+    std::string meshFile = "../testdata/testmesh_long_bar.mesh"; // (e.g., a 0.5x0.5x5.0 bar)
+    
+    constexpr double freq = 10e9; // 10 GHz
+    constexpr double c0 = 299792458.0;
+    constexpr double k0 = 2.0 * 3.1415926535 * freq / c0;
+
+    hpcfem::FemProblem problem(dim, order, meshFile);
+    
+    // 2. Create and set the physics
+    hpcfem::PhysicsWaveguideDriven physics(problem.getMesh(), k0);
+    
+    // 3. Define boundaries
+    // Attribute 1: PEC Walls
+    physics.addPecBoundary(1); 
+    // Attribute 2: Source Plane (e.g., at z=0)
+    physics.addSourceBoundary(2, 1.0); // 1.0 is dummy amplitude for now
+    // Attribute 3: ABC Port (e.g., at z=5.0)
+    physics.addAbcBoundary(3);
+
+    problem.setPhysics(&physics);
+
+    // 4. Solve the driven, complex-valued problem
+    problem.solve(); // This will solve for the complex E-field
+
+    // 5. Assertions
+    mfem::GridFunction eField = problem.getSolution();
+    
+    // TODO: This test needs to be more robust.
+    // A simple test: check the magnitude of the field at the end.
+    // A better test:
+    // 1. Get the E-field norm near the source.
+    // 2. Get the E-field norm near the termination (ABC).
+    // 3. Assert that norm_termination is significant (wave propagated).
+    // 4. A proper test would compute S11 and assert it is low (e.g., < -20dB).
+    // For now, we'll just check that the solve worked.
+    ASSERT_GT(eField.Norml2(), 0.0);
+}
+```
+
+**3. Implementation (TO PASS THE TEST):**
+Create `src/hpcfem/physics/physics_waveguide_driven.hpp` and `.cpp`.
+
+```cpp
+// in src/hpcfem/physics/physics_waveguide_driven.hpp
+#pragma once
+#include "mfem.hpp"
+#include "hpcfem/core/physics_interface.hpp"
+#include <map>
+
+namespace hpcfem {
+
+/**
+ * @brief Solves the 3D frequency-domain vector wave equation.
+ * @details This class assembles the complex-valued system for:
+ * Curl(1/ur * Curl(E)) - k0^2 * er * E = -j*k0*Z0*J
+ * It handles PEC walls, current sources, and absorbing boundaries.
+ */
+class PhysicsWaveguideDriven : public PhysicsInterface {
+public:
+    PhysicsWaveguideDriven(mfem::Mesh& mesh, double k0);
+    virtual ~PhysicsWaveguideDriven() = default;
+
+    void setup() override;
+
+    /** @brief Sets a PEC boundary condition (E x n = 0) */
+    void addPecBoundary(int attribute);
+
+    /** @brief Sets a first-order Absorbing Boundary Condition (ABC) */
+    void addAbcBoundary(int attribute);
+
+    /** @brief Sets a current source (J) */
+    void addSourceBoundary(int attribute, double amplitude);
+
+    // Overrides for complex-valued problem
+    // We need to manage Real and Imaginary parts (Rule #1)
+    
+    // TODO: This interface needs to be updated to support complex
+    // systems. A good "plain design" (Rule #2) is to have
+    // the physics object own two solvers, one for Real and one for Imag.
+    // Or, more simply, assemble the complex 2x2 block system:
+    // [ K  -wM ] [Er] = [fr]
+    // [ wM   K ] [Ei] = [fi]
+    // Where K is CurlCurl and M is Mass.
+    // This is a major implementation step.
+    
+    // TODO: For now, we will assume mfem::ComplexOperator
+    // is available and we solve a complex system.
+    
+    // This requires mfem::ParComplexGridFunction, etc.
+    mfem::GridFunction& getSolutionReal();
+    mfem::GridFunction& getSolutionImag();
+
+
+protected:
+    void assembleA() override; // Assembles the full complex operator
+    void assembleB() override; // Assembles the full complex RHS
+
+    double k0; // Wavenumber
+    mfem::ND_FECollection feCollection;
+    mfem::FiniteElementSpace feSpace;
+
+    // Boundary attributes
+    mfem::Array<int> pecAttributes;
+    mfem::Array<int> abcAttributes;
+    mfem::Array<int> srcAttributes;
+    
+    // TODO: These will need to be complex-valued
+    // mfem::BilinearForm a;
+    // mfem::LinearForm b;
+    // mfem::GridFunction eField;
+};
+
+} // namespace hpcfem
+```
+
+  * **Implementation Note:** This is the *hardest* step. You must implement the complex-valued system. The vector Helmholtz equation $\nabla \times (\nabla \times \mathbf{E}) - k_0^2 \mathbf{E} = 0$ is assembled as:
+      * **Stiffness `[K]`:** `mfem::CurlCurlIntegrator`
+      * **Mass `[M]`:** `mfem::VectorFEMassIntegrator`
+      * **ABC `[C]`:** `mfem::VectorFEMassIntegrator` (on the boundary)
+      * The full complex system is `[A] = [K] - k_0^2[M] + j k_0 [C]`. You will have to manage the real and imaginary parts of this system.
+
+-----
+
+## Step 3: The Advanced Port - Eigenfunction Expansion
+
+**1. Planning:**
+The ABC is an *approximation*. The *exact* solution is the hybrid FEM/Eigenfunction Expansion method (Chapter 10). This involves solving the 2D eigenproblem from Step 1, storing the modes, and using them as a boundary condition.
+
+**2. Test (WRITE THIS FIRST):**
+Create a new file: `tests/test_waveguide_port.cpp`
+
+```cpp
+// in tests/test_waveguide_port.cpp
+#include "gtest/gtest.h"
+#include "hpcfem/ports/waveguide_port.hpp"
+
+TEST(WaveguidePort, test_port_mode_calculation) {
+    // 1. Setup: Use the same 2D mesh as the eigenvalue test
+    std::string meshFile = "../testdata/testmesh_rectangle_2d.mesh";
+    constexpr double a = 2.286e-2;
+    constexpr double b = 1.016e-2;
+    constexpr int numModes = 5;
+
+    // 2. Create the port object
+    hpcfem::WaveguidePort port(meshFile, numModes, order);
+    
+    // 3. Action: Ask it to solve for its modes
+    port.solveModes();
+
+    // 4. Assertions
+    // Check cutoff frequencies (same as Step 1 test)
+    std::vector<double> kc = port.getCutoffWavenumbers();
+    ASSERT_EQ(kc.size(), numModes);
+    
+    constexpr double PI = 3.141592653589793;
+    double kc_TE10 = PI/a;
+    ASSERT_NEAR(kc[0], kc_TE10, kc_TE10 * 0.01);
+
+    // Check that it stored the eigenvectors (the mode shapes)
+    // mfem::GridFunction* modeShape = port.getModeShape(0); // TE10
+    // ASSERT_NE(modeShape, nullptr);
+    // ASSERT_GT(modeShape->Norml2(), 0.0);
+}
+
+// Now, update the driven physics test
+// in tests/test_physics_waveguide_driven.cpp
+TEST(PhysicsWaveguideDriven, test_waveguide_eigenfunction_port) {
+    // 1. Setup
+    // ... same as before, but use a mesh of a discontinuity
+    std::string meshFile = "../testdata/testmesh_waveguide_iris.mesh"; // TODO: Create this mesh
+    
+    // ...
+    hpcfem::PhysicsWaveguideDriven physics(problem.getMesh(), k0);
+    
+    // 2. Create ports
+    std::string portMeshFile = "../testdata/testmesh_rectangle_2d.mesh";
+    hpcfem::WaveguidePort port1(portMeshFile, 5, order);
+    hpcfem::WaveguidePort port2(portMeshFile, 5, order);
+
+    // 3. Define boundaries
+    physics.addPecBoundary(1); 
+    // Attribute 2: Port 1 (Source)
+    physics.addEigenfunctionPort(2, &port1, true); // true = isSource
+    // Attribute 3: Port 2 (Termination)
+    physics.addEigenfunctionPort(3, &port2, false); // false = isSource
+
+    problem.setPhysics(&physics);
+    problem.solve();
+
+    // 4. Post-process for S-Parameters
+    // TODO: Create SParameterCalculator class
+    // hpcfem::SParameterCalculator sCalc;
+    // double s11 = sCalc.getS11(physics, &port1);
+    // double s21 = sCalc.getS21(physics, &port2);
+
+    // 5. Assertions
+    // For a simple through-waveguide (no iris), S11 ~ 0, S21 ~ 1
+    // For an iris, we just check power conservation (Rule #10)
+    // double powerConservation = std::pow(s11, 2) + std::pow(s21, 2);
+    // ASSERT_NEAR(powerConservation, 1.0, 1e-3);
+}
+```
+
+**3. Implementation (TO PASS THE TEST):**
+
+**A. `src/hpcfem/ports/waveguide_port.hpp` (and `.cpp`)**
+
+  * This class will hold a 2D `mfem::Mesh` of the port cross-section.
+  * It will contain the `PhysicsWaveguideEigen` (from Step 1) as a private member.
+  * `solveModes()` will call the eigensolver and store the `mfem::GridFunction` eigenvectors and `k_c` eigenvalues.
+  * `getModeShape(int i)` will return the $i$-th mode.
+
+**B. `src/hpcfem/physics/physics_waveguide_driven.hpp` (Updates)**
+
+  * `addEigenfunctionPort(int attribute, WaveguidePort* port, bool isSource)`: This method is the core.
+      * It will create a new custom `mfem::BilinearFormIntegrator` (e.g., `WaveguidePortIntegrator`).
+      * This integrator will compute the port admittance matrix (using the modes from the `WaveguidePort` object) and add it to the global complex matrix `[A]`. This *is* the terminated boundary.
+      * If `isSource == true`, it will use the `TE10` mode shape from the `port` object to build the *RHS vector* $\{b\}$, which excites the system.
+
+**C. `src/hpcfem/analysis/s_parameter_calculator.hpp` (and `.cpp`)**
+
+  * This is a post-processing class.
+  * It will have methods like `getS11(PhysicsWaveguideDriven& physics, WaveguidePort& port)`.
+  * This method will perform a complex-valued surface integral over the port's boundary attribute, projecting the total 3D E-field solution onto the 2D port modes.
+  * `S_ij = \int_{Port_j} (\mathbf{E}_{total} \cdot \mathbf{e}_j) dA`
+  * This calculation gives the complex amplitudes of the reflected ($S_{11}, S_{22}$) and transmitted ($S_{21}, S_{12}$) modes.
+
+-----
+
+## Step 4: Refactor, Document, and Stress Test
+
+**1. Refactoring (Rule \#10, \#14):**
+
+  * The `PhysicsWaveguideDriven` class will become large. Review it to ensure file-length (Rule \#14) and nesting (Rule \#4) rules are followed.
+  * The complex-number handling (e.g., the 2x2 block matrix) should be clean and readable.
+
+**2. Documenting (Rule \#5, \#6):**
+
+  * Add all new classes (`PhysicsWaveguideEigen`, `PhysicsWaveguideDriven`, `WaveguidePort`, `SParameterCalculator`, `WaveguidePortIntegrator`) to `docs/hpcfem-doc/naming_registry.md`.
+  * Ensure all public methods have Doxygen comments explaining their function.
+
+**3. Stress Testing (Rule \#10):**
+
+  * Modify the `test_waveguide_eigenfunction_port` test.
+  * Load a much finer mesh (e.g., 1e6+ elements).
+  * Run the simulation (in Release mode, `cmake-build-release`, Rule \#21) with `mpirun -n 16`.
+  * The test passes if:
+    1.  The parallel run completes without crashing (Rule \#25).
+    2.  The S-parameter results are consistent with the low-resolution serial run.
+    3.  The solver (e.g., Hypre AMG, `SolverHypreAmg`) (Rule \#12) converges efficiently.
