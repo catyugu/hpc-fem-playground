@@ -42,9 +42,9 @@ constexpr double EIGENVALUE_TOLERANCE = 0.10; // 10% tolerance (3D FEM is less a
 TEST(PhysicsCavityEigen, test_3d_cavity_modes)
 {
     // 1. Setup the problem - create a 3D rectangular cavity mesh
-    constexpr int elementsX = 20;
-    constexpr int elementsY = 12;
-    constexpr int elementsZ = 40;
+    constexpr int elementsX = 10;
+    constexpr int elementsY = 6;
+    constexpr int elementsZ = 20;
     
 #ifdef MFEM_USE_MPI
     // Create 3D Cartesian mesh
