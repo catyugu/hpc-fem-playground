@@ -179,6 +179,80 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
         }
     }
 
+    // If TE (natural BC) the stiffness A is singular (constant nullspace).
+    // Prefer a rank-1 M-orthonormal projector regularization (option 1).
+    if (modeType_ == WaveguideModeType::TE)
+    {
+        double alpha = 1e-8; // base strength for projector
+
+        // Build a constant ParGridFunction and get its true-dofs vector
+        mfem::ParGridFunction ones(fespace_);
+        ones = 1.0;
+        mfem::HypreParVector *tv = ones.GetTrueDofs();
+
+        // tmp = M * tv
+        mfem::HypreParVector tmp = tv->CreateCompatibleVector();
+        M->Mult(*tv, tmp);
+        double mvv = mfem::InnerProduct(tv, &tmp);
+
+        int mpisize = 1; MPI_Comm_size(MPI_COMM_WORLD, &mpisize);
+        if (mvv <= 0.0 || !std::isfinite(mvv) || mpisize != 1)
+        {
+            // Fallback: simple Tikhonov shift with the mass matrix.
+            mfem::HypreParMatrix *Areg = mfem::Add(1.0, *A, alpha, *M);
+            delete A;
+            A = Areg;
+        }
+        else
+        {
+            // Single-rank MPI: construct a full rank-1 CSR on rank 0 and
+            // convert it to a HypreParMatrix via the rank-0 CSR constructor.
+            std::cout << "(parallel single-rank) TE: building rank-1 M-orthonormal projector, mvv=" << mvv << "\n";
+            double scale = 1.0 / sqrt(mvv);
+
+            // Gather global vector on rank 0
+            mfem::Vector *gvp = tv->GlobalVector(); // full vector on rank 0
+            mfem::Vector gv = *gvp;
+            delete gvp;
+            int n = gv.Size();
+
+            // Build CSR arrays (dense outer-product) on rank 0
+            int *I = new int[n+1];
+            HYPRE_BigInt *Jbig = new HYPRE_BigInt[n*n];
+            double *data = new double[n*n];
+            I[0] = 0;
+            for (int i = 0; i < n; ++i)
+            {
+                I[i+1] = I[i] + n;
+                for (int j = 0; j < n; ++j)
+                {
+                    Jbig[I[i] + j] = (HYPRE_BigInt) j;
+                    data[I[i] + j] = alpha * (gv(i)*scale) * (gv(j)*scale);
+                }
+            }
+
+            // Create SparseMatrix from CSR arrays (ownership transferred)
+            // Create HypreParMatrix from the CSR arrays (works with assumed
+            // partition mode). Ownership of I/Jbig/data is transferred to
+            // the HypreParMatrix constructor, so we don't free them here.
+            HYPRE_BigInt *row_starts = fespace_->GetTrueDofOffsets();
+            HYPRE_BigInt *col_starts = row_starts;
+            mfem::HypreParMatrix *Ppar = new mfem::HypreParMatrix(MPI_COMM_WORLD,
+                                                                 n, /* local rows */
+                                                                 (HYPRE_BigInt) n, (HYPRE_BigInt) n,
+                                                                 I, Jbig, data,
+                                                                 row_starts, col_starts);
+
+            // Add projector to A
+            mfem::HypreParMatrix *Areg = mfem::Add(1.0, *A, 1.0, *Ppar);
+            delete A;
+            A = Areg;
+
+            delete Ppar;
+        }
+        delete tv;
+    }
+
     // Preconditioner: HypreBoomerAMG for Laplacian
     mfem::HypreBoomerAMG *amg = new mfem::HypreBoomerAMG(*A);
     amg->SetPrintLevel(0);
@@ -281,6 +355,56 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
         double M_mean = M_sum / M_diag.Size();
         std::cout << "(serial) A diag: min="<<A_min<<" max="<<A_max<<" mean="<<A_mean<<"\n";
         std::cout << "(serial) M diag: min="<<M_min<<" max="<<M_max<<" mean="<<M_mean<<"\n";
+    }
+
+    // If TE (natural BC) regularize serial A by adding a small multiple of M
+    if (modeType_ == WaveguideModeType::TE)
+    {
+        // Implement option (1): add a rank-1 M-orthonormal projector
+        // P = alpha * v * v^T where v is the constant vector normalized
+        // in the M-inner-product: v^T M v = 1.
+        double alpha = 1e-8;
+        int n = A->Height();
+        mfem::Vector v(n);
+        v = 1.0; // constant true-dof vector
+
+        // tmp = M * v
+        mfem::Vector tmp(n);
+        M->Mult(v, tmp);
+        double mvv = v * tmp; // v^T M v
+
+        if (mvv <= 0.0 || !std::isfinite(mvv))
+        {
+            // fallback to diagonal regularization if something unexpected
+            mfem::SparseMatrix *Areg = mfem::Add(1.0, *A, alpha, *M);
+            delete A;
+            A = Areg;
+        }
+        else
+        {
+                std::cout << "(serial) TE: building rank-1 M-orthonormal projector, mvv=" << mvv << "\n";
+            v *= 1.0 / sqrt(mvv); // now v^T M v == 1
+
+            // Build a (dense-in-sparsity) rank-1 SparseMatrix P locally
+            mfem::SparseMatrix *P = new mfem::SparseMatrix(n, n);
+            for (int i = 0; i < n; ++i)
+            {
+                for (int j = 0; j < n; ++j)
+                {
+                    double val = alpha * v(i) * v(j);
+                    if (val != 0.0)
+                    {
+                        P->Add(i, j, val);
+                    }
+                }
+            }
+            P->Finalize();
+
+            mfem::SparseMatrix *Areg = mfem::Add(1.0, *A, 1.0, *P);
+            delete P;
+            delete A;
+            A = Areg;
+        }
     }
 
     // Use MFEM SlepcEigenSolver wrapper
