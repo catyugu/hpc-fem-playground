@@ -5,6 +5,7 @@ add_library(hpcfem
     hpcfem/physics/physics_electrostatics.cpp
     hpcfem/physics/physics_thermal.cpp
     hpcfem/physics/physics_joule_heating.cpp
+    hpcfem/physics/physics_cavity_eigen.cpp
     hpcfem/solvers/solver_hypre_amg.cpp
 )
 
