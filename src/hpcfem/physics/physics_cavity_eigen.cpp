@@ -1,11 +1,11 @@
 /**
- * @file physics/physics_waveguide_eigen.cpp
+ * @file physics/physics_cavity_eigen.cpp
  * @brief Implementation of 3D Maxwell eigenvalue problem solver
  * 
  * Based on MFEM example ex13p.cpp
  */
 
-#include "physics_waveguide_eigen.hpp"
+#include "physics_cavity_eigen.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -13,7 +13,7 @@ namespace hpcfem
 {
 
 #ifdef MFEM_USE_MPI
-PhysicsWaveguideEigen::PhysicsWaveguideEigen(mfem::ParMesh* pmesh, int order)
+PhysicsCavityEigen::PhysicsCavityEigen(mfem::ParMesh* pmesh, int order)
     : pmesh_(pmesh),
       curlCurlForm_(nullptr),
       massForm_(nullptr),
@@ -24,13 +24,13 @@ PhysicsWaveguideEigen::PhysicsWaveguideEigen(mfem::ParMesh* pmesh, int order)
 {
     if (!pmesh_)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: mesh pointer is null");
+        throw std::runtime_error("PhysicsCavityEigen: mesh pointer is null");
     }
     
     int dim = pmesh_->Dimension();
     if (dim != 3)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: only 3D meshes are supported");
+        throw std::runtime_error("PhysicsCavityEigen: only 3D meshes are supported");
     }
     
     // Create Nedelec finite element collection (edge elements for E-field)
@@ -38,7 +38,7 @@ PhysicsWaveguideEigen::PhysicsWaveguideEigen(mfem::ParMesh* pmesh, int order)
     fespace_ = new mfem::ParFiniteElementSpace(pmesh_, feCollection_);
 }
 #else
-PhysicsWaveguideEigen::PhysicsWaveguideEigen(mfem::Mesh* mesh, int order)
+PhysicsCavityEigen::PhysicsCavityEigen(mfem::Mesh* mesh, int order)
     : mesh_(mesh),
       curlCurlForm_(nullptr),
       massForm_(nullptr),
@@ -49,13 +49,13 @@ PhysicsWaveguideEigen::PhysicsWaveguideEigen(mfem::Mesh* mesh, int order)
 {
     if (!mesh_)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: mesh pointer is null");
+        throw std::runtime_error("PhysicsCavityEigen: mesh pointer is null");
     }
     
     int dim = mesh_->Dimension();
     if (dim != 3)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: only 3D meshes are supported");
+        throw std::runtime_error("PhysicsCavityEigen: only 3D meshes are supported");
     }
     
     // Create Nedelec finite element collection (edge elements for E-field)
@@ -64,7 +64,7 @@ PhysicsWaveguideEigen::PhysicsWaveguideEigen(mfem::Mesh* mesh, int order)
 }
 #endif
 
-PhysicsWaveguideEigen::~PhysicsWaveguideEigen()
+PhysicsCavityEigen::~PhysicsCavityEigen()
 {
     delete curlCurlForm_;
     delete massForm_;
@@ -72,7 +72,7 @@ PhysicsWaveguideEigen::~PhysicsWaveguideEigen()
     delete feCollection_;
 }
 
-void PhysicsWaveguideEigen::assembleCurlCurlMatrix()
+void PhysicsCavityEigen::assembleCurlCurlMatrix()
 {
     // Assemble the curl-curl bilinear form: (∇×E, ∇×F)
     // This represents the stiffness matrix [A] in the eigenvalue problem
@@ -122,7 +122,7 @@ void PhysicsWaveguideEigen::assembleCurlCurlMatrix()
     curlCurlForm_->Finalize();
 }
 
-void PhysicsWaveguideEigen::assembleMassMatrix()
+void PhysicsCavityEigen::assembleMassMatrix()
 {
     // Assemble the mass matrix bilinear form: (E, F)
     // This represents the mass matrix [M] in the eigenvalue problem
@@ -157,11 +157,11 @@ void PhysicsWaveguideEigen::assembleMassMatrix()
     massForm_->Finalize();
 }
 
-std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
+std::vector<double> PhysicsCavityEigen::solveEigenvalues(int numModes)
 {
     if (numModes <= 0)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: numModes must be positive");
+        throw std::runtime_error("PhysicsCavityEigen: numModes must be positive");
     }
 
     // Clear previous results
@@ -236,7 +236,7 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     delete M;
 #else
     // Serial version not implemented - use MPI version
-    throw std::runtime_error("PhysicsWaveguideEigen: Serial eigenvalue solver "
+    throw std::runtime_error("PhysicsCavityEigen: Serial eigenvalue solver "
                            "not implemented. Please use MPI version.");
 #endif
 
@@ -244,26 +244,26 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     return eigenvalues_;
 }
 
-std::vector<mfem::Vector> PhysicsWaveguideEigen::getEigenvectors() const
+std::vector<mfem::Vector> PhysicsCavityEigen::getEigenvectors() const
 {
     if (!isSolved_)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: must call solveEigenvalues() first");
+        throw std::runtime_error("PhysicsCavityEigen: must call solveEigenvalues() first");
     }
     return eigenvectors_;
 }
 
 #ifdef MFEM_USE_MPI
-mfem::ParGridFunction* PhysicsWaveguideEigen::getModeShape(int modeIndex)
+mfem::ParGridFunction* PhysicsCavityEigen::getModeShape(int modeIndex)
 {
     if (!isSolved_)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: must call solveEigenvalues() first");
+        throw std::runtime_error("PhysicsCavityEigen: must call solveEigenvalues() first");
     }
     
     if (modeIndex < 0 || modeIndex >= static_cast<int>(eigenvectors_.size()))
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: mode index out of range");
+        throw std::runtime_error("PhysicsCavityEigen: mode index out of range");
     }
     
     mfem::ParGridFunction* gf = new mfem::ParGridFunction(fespace_);
@@ -271,16 +271,16 @@ mfem::ParGridFunction* PhysicsWaveguideEigen::getModeShape(int modeIndex)
     return gf;
 }
 #else
-mfem::GridFunction* PhysicsWaveguideEigen::getModeShape(int modeIndex)
+mfem::GridFunction* PhysicsCavityEigen::getModeShape(int modeIndex)
 {
     if (!isSolved_)
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: must call solveEigenvalues() first");
+        throw std::runtime_error("PhysicsCavityEigen: must call solveEigenvalues() first");
     }
     
     if (modeIndex < 0 || modeIndex >= static_cast<int>(eigenvectors_.size()))
     {
-        throw std::runtime_error("PhysicsWaveguideEigen: mode index out of range");
+        throw std::runtime_error("PhysicsCavityEigen: mode index out of range");
     }
     
     mfem::GridFunction* gf = new mfem::GridFunction(fespace_);

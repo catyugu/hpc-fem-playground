@@ -1,10 +1,10 @@
 /**
- * @file physics/physics_waveguide_eigen.hpp
- * @brief Solves the 3D Maxwell eigenvalue problem for cavity/waveguide modes
+ * @file physics/physics_cavity_eigen.hpp
+ * @brief Solves the 3D Maxwell eigenvalue problem for cavity modes
  * 
  * This class implements the 3D electromagnetic eigenvalue solver using
  * Nedelec (edge) elements. It solves: ∇×∇×E = λE with PEC boundary conditions.
- * This is the proper formulation for waveguide cavity analysis and mode calculation.
+ * This is the proper formulation for cavity analysis and mode calculation.
  * 
  * Based on MFEM example ex13p.cpp
  */
@@ -22,10 +22,10 @@ namespace hpcfem
  * @brief Solves the 3D Maxwell eigenvalue problem for electromagnetic modes
  * @details This class solves ∇×∇×E = λE using Nedelec finite elements
  * in 3D cavities. The eigenvalues λ represent (k_c)² where k_c is the
- * cutoff wavenumber. This is used for waveguide mode analysis and
+ * cutoff wavenumber. This is used for mode analysis and
  * S-parameter port definitions.
  */
-class PhysicsWaveguideEigen
+class PhysicsCavityEigen
 {
 public:
 #ifdef MFEM_USE_MPI
@@ -34,20 +34,20 @@ public:
      * @param pmesh Parallel mesh representing the 3D cavity or waveguide section
      * @param order Polynomial order for Nedelec finite element space
      */
-    PhysicsWaveguideEigen(mfem::ParMesh* pmesh, int order);
+    PhysicsCavityEigen(mfem::ParMesh* pmesh, int order);
 #else
     /**
      * @brief Constructor for serial execution
      * @param mesh Mesh representing the 3D cavity or waveguide section
      * @param order Polynomial order for Nedelec finite element space
      */
-    PhysicsWaveguideEigen(mfem::Mesh* mesh, int order);
+    PhysicsCavityEigen(mfem::Mesh* mesh, int order);
 #endif
 
     /**
      * @brief Destructor
      */
-    ~PhysicsWaveguideEigen();
+    ~PhysicsCavityEigen();
 
     /**
      * @brief Solves the generalized eigenvalue problem ∇×∇×E = λ·M·E

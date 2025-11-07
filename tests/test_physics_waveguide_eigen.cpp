@@ -1,5 +1,5 @@
 /**
- * @file test_physics_waveguide_eigen.cpp
+ * @file test_physics_cavity_eigen.cpp
  * @brief Test for 3D Maxwell eigenvalue problem solver
  * 
  * This test validates the 3D electromagnetic eigenvalue solver by computing
@@ -11,7 +11,7 @@
 
 #include "gtest/gtest.h"
 #include "mfem.hpp"
-#include "hpcfem/physics/physics_waveguide_eigen.hpp"
+#include "hpcfem/physics/physics_cavity_eigen.hpp"
 
 #include <string>
 #include <vector>
@@ -26,7 +26,7 @@ constexpr double CAVITY_LENGTH_X = 0.02286;  // 22.86 mm (0.9 inches) - width 'a
 constexpr double CAVITY_LENGTH_Y = 0.01016;  // 10.16 mm (0.4 inches) - height 'b'
 constexpr double CAVITY_LENGTH_Z = 0.05000;  // 50 mm - cavity length (arbitrary for testing)
 
-constexpr int NUM_MODES_TO_COMPUTE = 5;
+constexpr int NUM_MODES_TO_COMPUTE = 10;
 constexpr int POLYNOMIAL_ORDER = 1;
 constexpr double EIGENVALUE_TOLERANCE = 0.10; // 10% tolerance (3D FEM is less accurate than analytical)
 
@@ -39,12 +39,12 @@ constexpr double EIGENVALUE_TOLERANCE = 0.10; // 10% tolerance (3D FEM is less a
  * 
  * WR-90 dimensions: 22.86mm × 10.16mm (standard waveguide)
  */
-TEST(PhysicsWaveguideEigen, test_3d_cavity_modes)
+TEST(PhysicsCavityEigen, test_3d_cavity_modes)
 {
     // 1. Setup the problem - create a 3D rectangular cavity mesh
-    constexpr int elementsX = 8;
-    constexpr int elementsY = 6;
-    constexpr int elementsZ = 6;
+    constexpr int elementsX = 20;
+    constexpr int elementsY = 12;
+    constexpr int elementsZ = 40;
     
 #ifdef MFEM_USE_MPI
     // Create 3D Cartesian mesh
@@ -76,75 +76,96 @@ TEST(PhysicsWaveguideEigen, test_3d_cavity_modes)
 #endif
 
     // 2. Create the physics object
-    hpcfem::PhysicsWaveguideEigen physics(&mesh, POLYNOMIAL_ORDER);
+    hpcfem::PhysicsCavityEigen physics(&mesh, POLYNOMIAL_ORDER);
     
     // 3. Solve the eigenvalue problem
     std::vector<double> eigenvalues = physics.solveEigenvalues(NUM_MODES_TO_COMPUTE);
 
-    // 4. Compute analytical solutions for lowest modes
-    // λ = k² = (mπ/Lx)² + (nπ/Ly)² + (pπ/Lz)²
-    // Lowest modes: (1,0,0), (0,1,0), (0,0,1), (1,1,0), (1,0,1), etc.
+    // 4. Compute analytical Maxwell cavity solutions for lowest modes
+    // For a rectangular PEC cavity (dimensions Lx,Ly,Lz) modal eigenvalues
+    // are k^2 = (m*pi/Lx)^2 + (n*pi/Ly)^2 + (p*pi/Lz)^2 where (m,n,p)
+    // are integers. TM modes require m,n,p >= 1. TE modes allow zeros but
+    // not the trivial (0,0,0). We'll generate both TE and TM sets up to a
+    // modest index, deduplicate, sort, and match FEM eigenvalues to the
+    // nearest analytical values.
     std::vector<double> analyticalEigenvalues;
-    
-    // Generate all combinations up to index 2 in each direction
-    for (int m = 0; m <= 2; ++m)
+    const int maxIndex = 4; // increase if you need more analytical modes
+    const double pi = PI;
+
+    for (int m = 0; m <= maxIndex; ++m)
     {
-        for (int n = 0; n <= 2; ++n)
+        for (int n = 0; n <= maxIndex; ++n)
         {
-            for (int p = 0; p <= 2; ++p)
+            for (int p = 0; p <= maxIndex; ++p)
             {
-                // Skip (0,0,0) - not a valid mode
-                if (m == 0 && n == 0 && p == 0) continue;
-                
-                double lambda = std::pow(m * PI / CAVITY_LENGTH_X, 2) +
-                               std::pow(n * PI / CAVITY_LENGTH_Y, 2) +
-                               std::pow(p * PI / CAVITY_LENGTH_Z, 2);
-                analyticalEigenvalues.push_back(lambda);
+                if (m == 0 && n == 0 && p == 0) { continue; }
+
+                // TE: any non-trivial combination
+                double k2_te = std::pow(m * pi / CAVITY_LENGTH_X, 2) +
+                               std::pow(n * pi / CAVITY_LENGTH_Y, 2) +
+                               std::pow(p * pi / CAVITY_LENGTH_Z, 2);
+                analyticalEigenvalues.push_back(k2_te);
+
+                // TM: require all indices positive
+                if (m >= 1 && n >= 1 && p >= 1)
+                {
+                    double k2_tm = k2_te; // same formula, different mode type
+                    analyticalEigenvalues.push_back(k2_tm);
+                }
             }
         }
     }
-    
-    // Sort analytical values
+
+    // Deduplicate and sort analytical values
     std::sort(analyticalEigenvalues.begin(), analyticalEigenvalues.end());
-    
-    // 5. Assertions
+    const double dedup_eps = 1e-8;
+    std::vector<double> uniqueAnalytical;
+    for (double v : analyticalEigenvalues)
+    {
+        if (uniqueAnalytical.empty() || std::abs(v - uniqueAnalytical.back()) > dedup_eps)
+        {
+            uniqueAnalytical.push_back(v);
+        }
+    }
+    analyticalEigenvalues.swap(uniqueAnalytical);
+
     ASSERT_EQ(eigenvalues.size(), NUM_MODES_TO_COMPUTE)
         << "Expected " << NUM_MODES_TO_COMPUTE << " eigenvalues";
 
-    // NOTE: The analytical scalar formula used previously is not directly
-    // representative of the vector Maxwell eigenvalue problem with Nedelec
-    // elements and PEC boundaries. Different mode types (TE/TM) and the
-    // vector nature of the field change the ordering of eigenvalues. Instead
-    // of a strict pointwise comparison we assert basic sanity checks and
-    // print a comparison table for manual inspection.
+    // Match FEM eigenvalues to nearest analytical eigenvalues (one-to-one)
+    std::vector<bool> used(analyticalEigenvalues.size(), false);
+    for (size_t i = 0; i < eigenvalues.size(); ++i)
+    {
+        double fem = eigenvalues[i];
+        size_t best_j = 0;
+        double best_diff = std::numeric_limits<double>::infinity();
+        for (size_t j = 0; j < analyticalEigenvalues.size(); ++j)
+        {
+            if (used[j]) { continue; }
+            double diff = std::abs(fem - analyticalEigenvalues[j]);
+            if (diff < best_diff)
+            {
+                best_diff = diff;
+                best_j = j;
+            }
+        }
+        double rel_err = best_diff / analyticalEigenvalues[best_j];
 
 #ifdef MFEM_USE_MPI
-    if (rank == 0)
-    {
-#endif
-        std::cout << "\nComparison (FEM vs scalar-analytical, for reference):" << std::endl;
-        std::cout << "Mode | FEM λ      | Analytical λ | Note" << std::endl;
-        std::cout << "-----+------------+--------------+----------------" << std::endl;
-        for (int i = 0; i < NUM_MODES_TO_COMPUTE && i < static_cast<int>(analyticalEigenvalues.size()); ++i)
+        if (rank == 0)
         {
-            std::cout << "  " << i << "  | "
-                      << std::scientific << eigenvalues[i] << " | "
-                      << analyticalEigenvalues[i] << " | "
-                      << "(reference)" << std::endl;
+            std::cout << "Match FEM mode " << i << ": FEM=" << fem
+                      << " analytical=" << analyticalEigenvalues[best_j]
+                      << " rel_err=" << rel_err*100.0 << "%\n";
         }
-        std::cout << std::endl;
-#ifdef MFEM_USE_MPI
-    }
+#else
+        std::cout << "Match FEM mode " << i << ": FEM=" << fem
+                  << " analytical=" << analyticalEigenvalues[best_j]
+                  << " rel_err=" << rel_err*100.0 << "%\n";
 #endif
 
-    // Sanity checks: eigenvalues must be positive and non-decreasing
-    for (int i = 0; i < NUM_MODES_TO_COMPUTE; ++i)
-    {
-        EXPECT_GT(eigenvalues[i], 0.0) << "Eigenvalue " << i << " should be positive";
-        if (i > 0)
-        {
-            EXPECT_GE(eigenvalues[i], eigenvalues[i-1]) << "Eigenvalues should be non-decreasing";
-        }
+        EXPECT_LE(rel_err, EIGENVALUE_TOLERANCE) << "Mode " << i << " mismatch: rel_err=" << rel_err;
+        used[best_j] = true;
     }
 }
 
@@ -152,7 +173,7 @@ TEST(PhysicsWaveguideEigen, test_3d_cavity_modes)
  * @brief Test that eigenvectors are properly computed
  * @details Validates that mode shapes can be extracted as grid functions
  */
-TEST(PhysicsWaveguideEigen, test_mode_shapes)
+TEST(PhysicsCavityEigen, test_mode_shapes)
 {
     // Setup
     constexpr int elementsX = 3;
@@ -170,7 +191,7 @@ TEST(PhysicsWaveguideEigen, test_mode_shapes)
         0.05, 0.03, 0.04);
 #endif
 
-    hpcfem::PhysicsWaveguideEigen physics(&mesh, POLYNOMIAL_ORDER);
+    hpcfem::PhysicsCavityEigen physics(&mesh, POLYNOMIAL_ORDER);
     
     // Solve
     constexpr int numModesTest = 3;
