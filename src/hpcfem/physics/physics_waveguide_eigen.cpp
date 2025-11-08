@@ -128,17 +128,6 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     // Parallel path: form system matrices with essential BCs if TM
     mfem::Array<int> ess_bdr;
     mfem::Array<int> ess_tdof_list;
-    // print mesh extents for diagnostics
-    {
-        mfem::Vector pmin, pmax;
-        pmesh_->GetBoundingBox(pmin, pmax);
-        int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        if (rank == 0)
-        {
-            std::cout << "Mesh bbox: [" << pmin(0) << "," << pmin(1) << "] - ["
-                      << pmax(0) << "," << pmax(1) << "]" << std::endl;
-        }
-    }
 
     if (modeType_ == WaveguideModeType::TM)
     {
@@ -148,36 +137,12 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
             ess_bdr = 0;
             pmesh_->MarkExternalBoundaries(ess_bdr);
             fespace_->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
-            int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-            if (rank == 0)
-            {
-                std::cout << "TM: essential true dofs = " << ess_tdof_list.Size() << std::endl;
-            }
         }
     }
 
     // Get parallel assembled operators (they already had essential DOFs handled above)
     mfem::HypreParMatrix *A = stiffForm_->ParallelAssemble();
     mfem::HypreParMatrix *M = massForm_->ParallelAssemble();
-
-    // Diagnostic: print diagonal stats for A and M to check scaling
-    {
-        mfem::Vector A_diag, M_diag;
-        A->GetDiag(A_diag);
-        M->GetDiag(M_diag);
-        double A_min=1e300, A_max=-1e300, A_sum=0.0;
-        double M_min=1e300, M_max=-1e300, M_sum=0.0;
-        for (int i=0;i<A_diag.Size();++i){ double v=A_diag(i); A_min=std::min(A_min,v); A_max=std::max(A_max,v); A_sum+=v; }
-        for (int i=0;i<M_diag.Size();++i){ double v=M_diag(i); M_min=std::min(M_min,v); M_max=std::max(M_max,v); M_sum+=v; }
-        double A_mean = A_sum / A_diag.Size();
-        double M_mean = M_sum / M_diag.Size();
-        int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        if (rank == 0)
-        {
-            std::cout << "A diag: min="<<A_min<<" max="<<A_max<<" mean="<<A_mean<<"\n";
-            std::cout << "M diag: min="<<M_min<<" max="<<M_max<<" mean="<<M_mean<<"\n";
-        }
-    }
 
     // If TE (natural BC) the stiffness A is singular (constant nullspace).
     // Regularize by adding a rank-1 M-orthonormal projector: P = alpha * v v^T
@@ -213,12 +178,6 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
         int rank = 0, mpisize = 1;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &mpisize);
-
-        if (rank == 0)
-        {
-            std::cout << "TE: building rank-1 M-orthonormal projector (alpha=" << alpha 
-                      << ", mpisize=" << mpisize << ")" << std::endl;
-        }
 
         // Build the distributed rank-1 projector P = alpha * tv * tv^T
         // For HypreParMatrix, we need to construct diag and offd blocks.
@@ -367,16 +326,6 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     mfem::Array<double> evals;
     lobpcg->GetEigenvalues(evals);
 
-    int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0)
-    {
-        std::cout << "Computed " << evals.Size() << " eigenvalues (k_c^2)" << std::endl;
-        for (int ii = 0; ii < evals.Size(); ++ii)
-        {
-            std::cout << "  Mode " << ii << ": k_c^2 = " << evals[ii] << std::endl;
-        }
-    }
-
     for (int i = 0; i < evals.Size(); ++i)
     {
         eigenvalues_.push_back(evals[i]);
@@ -384,23 +333,6 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
         // Extract eigenvector into a ParGridFunction
         mfem::ParGridFunction gf(fespace_);
         gf = lobpcg->GetEigenvector(i);
-
-        // Diagnostic: compute Rayleigh quotient r = (v^T A v) / (v^T M v)
-        {
-            mfem::HypreParVector *tv = gf.GetTrueDofs();
-            mfem::HypreParVector tmpA(*A), tmpM(*M);
-            A->Mult(*tv, tmpA);
-            M->Mult(*tv, tmpM);
-            double num = mfem::InnerProduct(tv, &tmpA);
-            double den = mfem::InnerProduct(tv, &tmpM);
-            int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-            if (rank == 0)
-            {
-                std::cout << "Mode " << i << ": eigenvalue=" << evals[i]
-                          << " Rayleigh=" << (num/den) << std::endl;
-            }
-            delete tv;
-        }
 
         // store local dofs for getEigenvectors()
         mfem::Vector local; local = gf;
@@ -436,50 +368,23 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     sf->FormSystemMatrix(ess_tdof_list, A);
     mf->FormSystemMatrix(ess_tdof_list, M);
 
-    // Diagnostic: print diagonal stats for A and M (serial)
-    {
-        mfem::Vector A_diag, M_diag;
-        A->GetDiag(A_diag);
-        M->GetDiag(M_diag);
-        double A_min=1e300, A_max=-1e300, A_sum=0.0;
-        double M_min=1e300, M_max=-1e300, M_sum=0.0;
-        for (int i=0;i<A_diag.Size();++i){ double v=A_diag(i); A_min=std::min(A_min,v); A_max=std::max(A_max,v); A_sum+=v; }
-        for (int i=0;i<M_diag.Size();++i){ double v=M_diag(i); M_min=std::min(M_min,v); M_max=std::max(M_max,v); M_sum+=v; }
-        double A_mean = A_sum / A_diag.Size();
-        double M_mean = M_sum / M_diag.Size();
-        std::cout << "(serial) A diag: min="<<A_min<<" max="<<A_max<<" mean="<<A_mean<<"\n";
-        std::cout << "(serial) M diag: min="<<M_min<<" max="<<M_max<<" mean="<<M_mean<<"\n";
-    }
-
-    // If TE (natural BC) regularize serial A by adding a small multiple of M
+    // If TE (natural BC) regularize serial A by adding rank-1 M-orthonormal projector
     if (modeType_ == WaveguideModeType::TE)
     {
-        // Implement option (1): add a rank-1 M-orthonormal projector
-        // P = alpha * v * v^T where v is the constant vector normalized
-        // in the M-inner-product: v^T M v = 1.
         double alpha = 1e-8;
         int n = A->Height();
         mfem::Vector v(n);
         v = 1.0; // constant true-dof vector
 
-        // tmp = M * v
         mfem::Vector tmp(n);
         M->Mult(v, tmp);
         double mvv = v * tmp; // v^T M v
 
-        if (mvv <= 0.0 || !std::isfinite(mvv))
+        if (mvv > 0.0 && std::isfinite(mvv))
         {
-            // fallback to diagonal regularization if something unexpected
-            mfem::SparseMatrix *Areg = mfem::Add(1.0, *A, alpha, *M);
-            delete A;
-            A = Areg;
-        }
-        else
-        {
-                std::cout << "(serial) TE: building rank-1 M-orthonormal projector, mvv=" << mvv << "\n";
             v *= 1.0 / sqrt(mvv); // now v^T M v == 1
 
-            // Build a (dense-in-sparsity) rank-1 SparseMatrix P locally
+            // Build rank-1 SparseMatrix P
             mfem::SparseMatrix *P = new mfem::SparseMatrix(n, n);
             for (int i = 0; i < n; ++i)
             {
@@ -511,24 +416,12 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     slepc.Solve();
 
     mfem::Vector evals; slepc.GetEigenvalues(evals);
-    std::cout << "Computed " << evals.Size() << " eigenvalues (k_c^2)" << std::endl;
     for (int i = 0; i < evals.Size(); ++i)
     {
         eigenvalues_.push_back(evals(i));
         mfem::GridFunction gf(fespace_);
         gf = slepc.GetEigenvector(i);
         mfem::Vector local = gf;
-        // Diagnostic: compute Rayleigh quotient r = (v^T A v) / (v^T M v)
-        {
-            mfem::Vector tv; gf.GetTrueDofs(tv);
-            mfem::Vector tmpA(tv.Size()), tmpM(tv.Size());
-            A->Mult(tv, tmpA);
-            M->Mult(tv, tmpM);
-            double num = tv * tmpA;
-            double den = tv * tmpM;
-            std::cout << "(serial) Mode " << i << ": eigenvalue=" << evals(i)
-                      << " Rayleigh=" << (num/den) << std::endl;
-        }
         eigenvectors_.push_back(local);
     }
 
