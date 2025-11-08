@@ -180,76 +180,170 @@ std::vector<double> PhysicsWaveguideEigen::solveEigenvalues(int numModes)
     }
 
     // If TE (natural BC) the stiffness A is singular (constant nullspace).
-    // Prefer a rank-1 M-orthonormal projector regularization (option 1).
+    // Regularize by adding a rank-1 M-orthonormal projector: P = alpha * v v^T
+    // where v is the constant true-dof vector normalized so that v^T M v = 1.
     if (modeType_ == WaveguideModeType::TE)
     {
-        double alpha = 1e-8; // base strength for projector
+        double alpha = 1e-8; // projector strength
 
         // Build a constant ParGridFunction and get its true-dofs vector
         mfem::ParGridFunction ones(fespace_);
         ones = 1.0;
         mfem::HypreParVector *tv = ones.GetTrueDofs();
 
-        // tmp = M * tv
+        // Compute v^T M v and normalize v
         mfem::HypreParVector tmp = tv->CreateCompatibleVector();
         M->Mult(*tv, tmp);
         double mvv = mfem::InnerProduct(tv, &tmp);
 
-        int mpisize = 1; MPI_Comm_size(MPI_COMM_WORLD, &mpisize);
-        if (mvv <= 0.0 || !std::isfinite(mvv) || mpisize != 1)
+        if (mvv <= 0.0 || !std::isfinite(mvv))
         {
-            // Fallback: simple Tikhonov shift with the mass matrix.
-            mfem::HypreParMatrix *Areg = mfem::Add(1.0, *A, alpha, *M);
-            delete A;
-            A = Areg;
-        }
-        else
-        {
-            // Single-rank MPI: construct a full rank-1 CSR on rank 0 and
-            // convert it to a HypreParMatrix via the rank-0 CSR constructor.
-            std::cout << "(parallel single-rank) TE: building rank-1 M-orthonormal projector, mvv=" << mvv << "\n";
-            double scale = 1.0 / sqrt(mvv);
-
-            // Gather global vector on rank 0
-            mfem::Vector *gvp = tv->GlobalVector(); // full vector on rank 0
-            mfem::Vector gv = *gvp;
-            delete gvp;
-            int n = gv.Size();
-
-            // Build CSR arrays (dense outer-product) on rank 0
-            int *I = new int[n+1];
-            HYPRE_BigInt *Jbig = new HYPRE_BigInt[n*n];
-            double *data = new double[n*n];
-            I[0] = 0;
-            for (int i = 0; i < n; ++i)
+            int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+            if (rank == 0)
             {
-                I[i+1] = I[i] + n;
-                for (int j = 0; j < n; ++j)
+                std::cerr << "ERROR: Invalid M-norm for constant vector: mvv=" << mvv << std::endl;
+            }
+            delete tv;
+            throw std::runtime_error("Cannot normalize constant vector for TE projector");
+        }
+
+        double scale = 1.0 / sqrt(mvv);
+        *tv *= scale; // Now tv is M-orthonormal: tv^T M tv = 1
+
+        int rank = 0, mpisize = 1;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Comm_size(MPI_COMM_WORLD, &mpisize);
+
+        if (rank == 0)
+        {
+            std::cout << "TE: building rank-1 M-orthonormal projector (alpha=" << alpha 
+                      << ", mpisize=" << mpisize << ")" << std::endl;
+        }
+
+        // Build the distributed rank-1 projector P = alpha * tv * tv^T
+        // For HypreParMatrix, we need to construct diag and offd blocks.
+
+        int local_size = tv->Size();
+        HYPRE_BigInt *row_starts = fespace_->GetTrueDofOffsets();
+        HYPRE_BigInt global_size = fespace_->GlobalTrueVSize();
+
+        // Get local portion of the normalized vector
+        mfem::Vector v_local(local_size);
+        for (int i = 0; i < local_size; ++i)
+        {
+            v_local(i) = (*tv)(i);
+        }
+
+        // Gather all vector values across all ranks
+        std::vector<double> v_global(global_size);
+        std::vector<int> recvcounts(mpisize);
+        std::vector<int> displs(mpisize);
+        
+        // Gather local sizes from all ranks
+        MPI_Allgather(&local_size, 1, MPI_INT,
+                      recvcounts.data(), 1, MPI_INT,
+                      MPI_COMM_WORLD);
+
+        // Compute displacements
+        displs[0] = 0;
+        for (int r = 1; r < mpisize; ++r)
+        {
+            displs[r] = displs[r-1] + recvcounts[r-1];
+        }
+
+        // Each rank sends its own local_size elements
+        MPI_Allgatherv(v_local.GetData(), local_size, MPI_DOUBLE,
+                       v_global.data(), recvcounts.data(), displs.data(),
+                       MPI_DOUBLE, MPI_COMM_WORLD);
+
+        // Determine the first column index for this rank
+        HYPRE_BigInt first_col = displs[rank];
+
+        // Construct diagonal block: P_diag(i,j) = alpha * v_local(i) * v_local(j)
+        int *diag_i = new int[local_size + 1];
+        int *diag_j = new int[local_size * local_size];
+        double *diag_data = new double[local_size * local_size];
+        
+        diag_i[0] = 0;
+        for (int i = 0; i < local_size; ++i)
+        {
+            diag_i[i+1] = diag_i[i] + local_size;
+            for (int j = 0; j < local_size; ++j)
+            {
+                diag_j[diag_i[i] + j] = j;
+                diag_data[diag_i[i] + j] = alpha * v_local(i) * v_local(j);
+            }
+        }
+
+        // Determine off-diagonal columns (all columns NOT in local range)
+        int offd_ncols = (int)(global_size - local_size);
+        HYPRE_BigInt *col_map_offd = nullptr;
+        int *offd_i = nullptr;
+        int *offd_j = nullptr;
+        double *offd_data = nullptr;
+
+        if (offd_ncols > 0)
+        {
+            col_map_offd = new HYPRE_BigInt[offd_ncols];
+            int col_idx = 0;
+            for (HYPRE_BigInt j = 0; j < global_size; ++j)
+            {
+                if (j < first_col || j >= first_col + local_size)
                 {
-                    Jbig[I[i] + j] = (HYPRE_BigInt) j;
-                    data[I[i] + j] = alpha * (gv(i)*scale) * (gv(j)*scale);
+                    col_map_offd[col_idx++] = j;
                 }
             }
 
-            // Create SparseMatrix from CSR arrays (ownership transferred)
-            // Create HypreParMatrix from the CSR arrays (works with assumed
-            // partition mode). Ownership of I/Jbig/data is transferred to
-            // the HypreParMatrix constructor, so we don't free them here.
-            HYPRE_BigInt *row_starts = fespace_->GetTrueDofOffsets();
-            HYPRE_BigInt *col_starts = row_starts;
-            mfem::HypreParMatrix *Ppar = new mfem::HypreParMatrix(MPI_COMM_WORLD,
-                                                                 n, /* local rows */
-                                                                 (HYPRE_BigInt) n, (HYPRE_BigInt) n,
-                                                                 I, Jbig, data,
-                                                                 row_starts, col_starts);
+            // Build off-diagonal CSR arrays
+            offd_i = new int[local_size + 1];
+            offd_j = new int[local_size * offd_ncols];
+            offd_data = new double[local_size * offd_ncols];
 
-            // Add projector to A
-            mfem::HypreParMatrix *Areg = mfem::Add(1.0, *A, 1.0, *Ppar);
-            delete A;
-            A = Areg;
-
-            delete Ppar;
+            offd_i[0] = 0;
+            for (int i = 0; i < local_size; ++i)
+            {
+                offd_i[i+1] = offd_i[i] + offd_ncols;
+                int idx = 0;
+                for (HYPRE_BigInt j = 0; j < global_size; ++j)
+                {
+                    if (j < first_col || j >= first_col + local_size)
+                    {
+                        offd_j[offd_i[i] + idx] = idx;
+                        offd_data[offd_i[i] + idx] = alpha * v_local(i) * v_global[j];
+                        idx++;
+                    }
+                }
+            }
         }
+        else
+        {
+            // Single rank case: no off-diagonal block
+            offd_i = new int[local_size + 1];
+            for (int i = 0; i <= local_size; ++i)
+                offd_i[i] = 0;
+        }
+
+        // Create SparseMatrix wrappers (ownership transferred to SparseMatrix)
+        mfem::SparseMatrix diag_mat(diag_i, diag_j, diag_data, local_size, local_size, 
+                                     true, true, true);
+        mfem::SparseMatrix offd_mat(offd_i, offd_j, offd_data, local_size, offd_ncols, 
+                                     true, true, true);
+
+        // Create HypreParMatrix from diag, offd, and col_map_offd
+        // The HypreParMatrix constructor will copy data from SparseMatrix objects
+        // and take ownership of col_map_offd
+        mfem::HypreParMatrix *Ppar = new mfem::HypreParMatrix(MPI_COMM_WORLD,
+                                                              global_size, global_size,
+                                                              row_starts, row_starts,
+                                                              &diag_mat, &offd_mat,
+                                                              col_map_offd);
+
+        // Add projector to A
+        mfem::HypreParMatrix *Areg = mfem::Add(1.0, *A, 1.0, *Ppar);
+        delete A;
+        A = Areg;
+
+        delete Ppar;
         delete tv;
     }
 
