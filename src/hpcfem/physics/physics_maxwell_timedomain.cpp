@@ -31,10 +31,12 @@ PhysicsMaxwellTimeDomain::PhysicsMaxwellTimeDomain(
       eField_(nullptr),
       bField_(nullptr),
       dEdtField_(nullptr),
+      hCurlMassEpsilon_(nullptr),
       hDivMassMuInv_(nullptr),
       hCurlLosses_(nullptr),
       weakCurlMuInv_(nullptr),
       curlOp_(nullptr),
+      massEpsilonMatrix_(nullptr),
       massMuInvMatrix_(nullptr),
       lossMatrix_(nullptr),
       negCurlMatrix_(nullptr),
@@ -128,10 +130,12 @@ PhysicsMaxwellTimeDomain::PhysicsMaxwellTimeDomain(
       eField_(nullptr),
       bField_(nullptr),
       dEdtField_(nullptr),
+      hCurlMassEpsilon_(nullptr),
       hDivMassMuInv_(nullptr),
       hCurlLosses_(nullptr),
       weakCurlMuInv_(nullptr),
       curlOp_(nullptr),
+      massEpsilonMatrix_(nullptr),
       massMuInvMatrix_(nullptr),
       lossMatrix_(nullptr),
       negCurlMatrix_(nullptr),
@@ -204,11 +208,13 @@ PhysicsMaxwellTimeDomain::~PhysicsMaxwellTimeDomain()
     delete rhsVec_;
     delete bVec_;
     delete eVec_;
+    delete massEpsilonMatrix_;
     delete massMuInvMatrix_;
     delete lossMatrix_;
     delete negCurlMatrix_;
     delete weakCurlMatrix_;
 #else
+    delete massEpsilonMatrix_;
     delete massMuInvMatrix_;
     delete lossMatrix_;
     delete negCurlMatrix_;
@@ -221,6 +227,7 @@ PhysicsMaxwellTimeDomain::~PhysicsMaxwellTimeDomain()
     delete curlOp_;
     delete weakCurlMuInv_;
     delete hCurlLosses_;
+    delete hCurlMassEpsilon_;
     delete hDivMassMuInv_;
     delete hDivFESpace_;
     delete hCurlFESpace_;
@@ -231,6 +238,14 @@ PhysicsMaxwellTimeDomain::~PhysicsMaxwellTimeDomain()
 void PhysicsMaxwellTimeDomain::assembleMatrices()
 {
 #ifdef MFEM_USE_MPI
+    // H(curl) mass matrix with ε
+    hCurlMassEpsilon_ = new mfem::ParBilinearForm(hCurlFESpace_);
+    hCurlMassEpsilon_->AddDomainIntegrator(
+        new mfem::VectorFEMassIntegrator(*materials_->getPermittivityCoefficient()));
+    hCurlMassEpsilon_->Assemble();
+    hCurlMassEpsilon_->Finalize();
+    massEpsilonMatrix_ = hCurlMassEpsilon_->ParallelAssemble();
+
     // H(div) mass matrix with μ⁻¹
     hDivMassMuInv_ = new mfem::ParBilinearForm(hDivFESpace_);
     hDivMassMuInv_->AddDomainIntegrator(
@@ -276,6 +291,15 @@ void PhysicsMaxwellTimeDomain::assembleMatrices()
     }
 #else
     // Serial version
+    // H(curl) mass matrix with ε
+    hCurlMassEpsilon_ = new mfem::BilinearForm(hCurlFESpace_);
+    hCurlMassEpsilon_->AddDomainIntegrator(
+        new mfem::VectorFEMassIntegrator(*materials_->getPermittivityCoefficient()));
+    hCurlMassEpsilon_->Assemble();
+    hCurlMassEpsilon_->Finalize();
+    massEpsilonMatrix_ = &(hCurlMassEpsilon_->SpMat());
+
+    // H(div) mass matrix with μ⁻¹
     hDivMassMuInv_ = new mfem::BilinearForm(hDivFESpace_);
     hDivMassMuInv_->AddDomainIntegrator(
         new mfem::VectorFEMassIntegrator(*materials_->getPermeabilityInvCoefficient()));
@@ -314,15 +338,14 @@ void PhysicsMaxwellTimeDomain::assembleMatrices()
 
 void PhysicsMaxwellTimeDomain::Mult(const mfem::Vector& B, mfem::Vector& dEdt) const
 {
-    // Compute dE/dt = (1/ε)[∇×(μ⁻¹B) - σE - J]
-    // This is the explicit operator evaluation for lossless case
+    // Compute dE/dt = M_ε⁻¹ * [∇×(μ⁻¹B) - σE - J]
+    // Step 1: Compute RHS = ∇×(μ⁻¹B) - J
     
 #ifdef MFEM_USE_MPI
-    // Step 1: Compute curl of magnetic flux: ∇×(μ⁻¹B)
-    // WeakCurlMatrix implements (μ⁻¹B, ∇×F)
+    // Compute curl of magnetic flux: ∇×(μ⁻¹B)
     weakCurlMatrix_->Mult(B, *rhsVec_);
     
-    // Step 2: Add source term if present
+    // Subtract source term if present
     if (sources_->hasSource())
     {
         mfem::HypreParVector* jDual = sources_->getDualForm()->ParallelAssemble();
@@ -330,15 +353,31 @@ void PhysicsMaxwellTimeDomain::Mult(const mfem::Vector& B, mfem::Vector& dEdt) c
         delete jDual;
     }
     
-    // Step 3: For explicit case, we need to solve M_ε * dE/dt = RHS
-    // For now, use a simple Richardson iteration (identity preconditioner)
-    // TODO: Use proper mass matrix solver
+    // Step 2: Solve M_ε * dE/dt = RHS using CG
+    // Setup solver if not already done
+    if (implicitSolver_ == nullptr)
+    {
+        // Use const_cast since we're setting up solver lazily
+        PhysicsMaxwellTimeDomain* nonConstThis = 
+            const_cast<PhysicsMaxwellTimeDomain*>(this);
+        
+        nonConstThis->implicitSolver_ = new mfem::CGSolver(pmesh_->GetComm());
+        nonConstThis->implicitSolver_->SetRelTol(1e-12);
+        nonConstThis->implicitSolver_->SetMaxIter(1000);
+        nonConstThis->implicitSolver_->SetPrintLevel(0);
+        
+        nonConstThis->preconditioner_ = new mfem::HypreSmoother();
+        nonConstThis->preconditioner_->SetType(mfem::HypreSmoother::Jacobi);
+        nonConstThis->preconditioner_->SetOperator(*massEpsilonMatrix_);
+        nonConstThis->implicitSolver_->SetPreconditioner(*nonConstThis->preconditioner_);
+        nonConstThis->implicitSolver_->SetOperator(*massEpsilonMatrix_);
+    }
     
-    // For explicit scheme without losses, just return the RHS
-    // (assuming mass matrix is identity or using lumped mass)
-    dEdt = *rhsVec_;
+    // Solve for dE/dt
+    dEdt = 0.0;
+    implicitSolver_->Mult(*rhsVec_, dEdt);
     
-    // Step 4: Apply boundary conditions
+    // Apply boundary conditions
     boundaries_->applyDirichletBC(dEdt);
 #else
     // Serial version
@@ -351,6 +390,23 @@ void PhysicsMaxwellTimeDomain::Mult(const mfem::Vector& B, mfem::Vector& dEdt) c
         sources_->getDualForm()->ParallelAssemble(jDual);
         dEdt -= jDual;
     }
+    
+    // Solve M_ε * y = dEdt for y
+    if (implicitSolver_ == nullptr)
+    {
+        PhysicsMaxwellTimeDomain* nonConstThis = 
+            const_cast<PhysicsMaxwellTimeDomain*>(this);
+        
+        nonConstThis->implicitSolver_ = new mfem::CGSolver();
+        nonConstThis->implicitSolver_->SetOperator(*massEpsilonMatrix_);
+        nonConstThis->implicitSolver_->SetRelTol(1e-12);
+        nonConstThis->implicitSolver_->SetMaxIter(1000);
+        nonConstThis->implicitSolver_->SetPrintLevel(0);
+    }
+    
+    mfem::Vector rhs(dEdt);
+    dEdt = 0.0;
+    implicitSolver_->Mult(rhs, dEdt);
     
     boundaries_->applyDirichletBC(dEdt);
 #endif
@@ -360,18 +416,15 @@ void PhysicsMaxwellTimeDomain::implicitSolve(double dt, const mfem::Vector& B,
                                             mfem::Vector& dEdt)
 {
     // Implicit solve for lossy case
-    // System: (M_ε + dt*M_σ + dt*ABC) * dE/dt = ∇×(μ⁻¹B) - J
+    // From: ε ∂E/∂t = ∇×(μ⁻¹B) - σE
+    // Backward Euler: (M_ε + dt*M_σ) * E^{n+1} = M_ε * E^n + dt * ∇×(μ⁻¹B^{n+1})
+    // So: (M_ε + dt*M_σ) * dE/dt = ∇×(μ⁻¹B) - σE^n
     
 #ifdef MFEM_USE_MPI
-    // Setup solver if not already done
-    if (implicitSolver_ == nullptr)
-    {
-        setupImplicitSolver(dt);
-    }
-    
-    // Compute RHS: ∇×(μ⁻¹B) - J
+    // Compute RHS: ∇×(μ⁻¹B)
     weakCurlMatrix_->Mult(B, *rhsVec_);
     
+    // Subtract source term if present
     if (sources_->hasSource())
     {
         mfem::HypreParVector* jDual = sources_->getDualForm()->ParallelAssemble();
@@ -379,20 +432,62 @@ void PhysicsMaxwellTimeDomain::implicitSolve(double dt, const mfem::Vector& B,
         delete jDual;
     }
     
-    // For now, use explicit method even for lossy case
-    // TODO: Assemble system matrix (M_ε + dt*M_σ + dt*ABC)
-    // TODO: Solve linear system
+    // Subtract σE^n from RHS
+    if (isLossy_ && lossMatrix_ != nullptr)
+    {
+        mfem::HypreParVector temp(hCurlFESpace_);
+        lossMatrix_->Mult(*eVec_, temp);
+        *rhsVec_ -= temp;
+    }
     
-    // Temporary: just use explicit (will be inaccurate for lossy)
-    dEdt = *rhsVec_;
+    // Assemble system matrix: A = M_ε + dt*M_σ
+    mfem::HypreParMatrix* systemMatrix = nullptr;
+    
+    if (isLossy_ && lossMatrix_ != nullptr)
+    {
+        // A = M_ε + dt*M_σ
+        systemMatrix = mfem::Add(1.0, *massEpsilonMatrix_, dt, *lossMatrix_);
+    }
+    else
+    {
+        // No losses, just use M_ε
+        systemMatrix = massEpsilonMatrix_;
+    }
+    
+    // Setup or update solver
+    if (implicitSolver_ == nullptr)
+    {
+        implicitSolver_ = new mfem::CGSolver(pmesh_->GetComm());
+        preconditioner_ = new mfem::HypreSmoother();
+        preconditioner_->SetType(mfem::HypreSmoother::Jacobi);
+        implicitSolver_->SetRelTol(1e-12);
+        implicitSolver_->SetMaxIter(1000);
+        implicitSolver_->SetPrintLevel(0);
+    }
+    
+    // Update operator and preconditioner
+    implicitSolver_->SetOperator(*systemMatrix);
+    if (systemMatrix != massEpsilonMatrix_)
+    {
+        preconditioner_->SetOperator(*systemMatrix);
+    }
+    else
+    {
+        preconditioner_->SetOperator(*massEpsilonMatrix_);
+    }
+    implicitSolver_->SetPreconditioner(*preconditioner_);
+    
+    // Solve for dE/dt
+    dEdt = 0.0;
+    implicitSolver_->Mult(*rhsVec_, dEdt);
     
     // Apply boundary conditions
     boundaries_->applyDirichletBC(dEdt);
     
-    if (myRank_ == 0 && isLossy_)
+    // Clean up if we created a new matrix
+    if (systemMatrix != massEpsilonMatrix_)
     {
-        std::cout << "Warning: Implicit solve not fully implemented, "
-                  << "using explicit approximation" << std::endl;
+        delete systemMatrix;
     }
 #else
     // Serial version
@@ -406,7 +501,49 @@ void PhysicsMaxwellTimeDomain::implicitSolve(double dt, const mfem::Vector& B,
         dEdt -= jDual;
     }
     
+    // Subtract σE^n
+    if (isLossy_ && lossMatrix_ != nullptr)
+    {
+        mfem::Vector temp(hCurlFESpace_->GetTrueVSize());
+        lossMatrix_->Mult(*eField_, temp);
+        dEdt -= temp;
+    }
+    
+    // Assemble system matrix
+    mfem::SparseMatrix* systemMatrix = nullptr;
+    
+    if (isLossy_ && lossMatrix_ != nullptr)
+    {
+        systemMatrix = mfem::Add(1.0, *massEpsilonMatrix_, dt, *lossMatrix_);
+    }
+    else
+    {
+        systemMatrix = massEpsilonMatrix_;
+    }
+    
+    // Setup or update solver
+    if (implicitSolver_ == nullptr)
+    {
+        implicitSolver_ = new mfem::CGSolver();
+        implicitSolver_->SetRelTol(1e-12);
+        implicitSolver_->SetMaxIter(1000);
+        implicitSolver_->SetPrintLevel(0);
+    }
+    
+    implicitSolver_->SetOperator(*systemMatrix);
+    
+    // Solve
+    mfem::Vector rhs(dEdt);
+    dEdt = 0.0;
+    implicitSolver_->Mult(rhs, dEdt);
+    
     boundaries_->applyDirichletBC(dEdt);
+    
+    // Clean up
+    if (systemMatrix != massEpsilonMatrix_)
+    {
+        delete systemMatrix;
+    }
 #endif
 }
 
@@ -446,33 +583,33 @@ double PhysicsMaxwellTimeDomain::getMaximumTimeStep() const
 
 double PhysicsMaxwellTimeDomain::getEnergy() const
 {
-    // Compute electromagnetic energy: E = 0.5 * (E^T M_ε E + B^T M_μ B)
+    // Compute electromagnetic energy: E = 0.5 * (E^T M_ε E + B^T M_μ^{-1} B)
     
     double energyE = 0.0;
     double energyB = 0.0;
     
 #ifdef MFEM_USE_MPI
     // Electric field energy: 0.5 * E^T M_ε E
-    // For simplicity, approximate with dot product (assumes identity mass matrix)
-    // TODO: Use actual permittivity mass matrix
-    // Note: InnerProduct already does MPI_Allreduce
-    energyE = 0.5 * mfem::InnerProduct(*eVec_, *eVec_);
+    mfem::HypreParVector tempE(hCurlFESpace_);
+    massEpsilonMatrix_->Mult(*eVec_, tempE);
+    energyE = 0.5 * mfem::InnerProduct(*eVec_, tempE);
     
-    // Magnetic field energy: 0.5 * B^T M_μ B
-    mfem::HypreParVector temp(hDivFESpace_);
-    massMuInvMatrix_->Mult(*bVec_, temp);
-    // Note: InnerProduct already does MPI_Allreduce
-    energyB = 0.5 * mfem::InnerProduct(*bVec_, temp);
+    // Magnetic field energy: 0.5 * B^T M_μ^{-1} B
+    mfem::HypreParVector tempB(hDivFESpace_);
+    massMuInvMatrix_->Mult(*bVec_, tempB);
+    energyB = 0.5 * mfem::InnerProduct(*bVec_, tempB);
     
     // InnerProduct already returns global sum, no need for additional Allreduce
     return energyE + energyB;
 #else
     // Serial version
-    energyE = 0.5 * (*eField_) * (*eField_);
+    mfem::Vector tempE(hCurlFESpace_->GetTrueVSize());
+    massEpsilonMatrix_->Mult(*eField_, tempE);
+    energyE = 0.5 * (*eField_) * tempE;
     
-    mfem::Vector temp(hDivFESpace_->GetTrueVSize());
-    massMuInvMatrix_->Mult(*bField_, temp);
-    energyB = 0.5 * (*bField_) * temp;
+    mfem::Vector tempB(hDivFESpace_->GetTrueVSize());
+    massMuInvMatrix_->Mult(*bField_, tempB);
+    energyB = 0.5 * (*bField_) * tempB;
     
     return energyE + energyB;
 #endif
@@ -500,6 +637,14 @@ void PhysicsMaxwellTimeDomain::syncGridFunctions()
     eField_->Distribute(eVec_);
     bField_->Distribute(bVec_);
 #endif
+}
+
+void PhysicsMaxwellTimeDomain::updateSourceTime(double time)
+{
+    if (sources_->hasSource())
+    {
+        sources_->updateTime(time);
+    }
 }
 
 void PhysicsMaxwellTimeDomain::setupImplicitSolver(double dt)

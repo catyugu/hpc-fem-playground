@@ -162,6 +162,12 @@ public:
      */
     void syncGridFunctions();
 
+    /**
+     * @brief Update source term for current time
+     * @param time Current simulation time
+     */
+    void updateSourceTime(double time);
+
 private:
     /**
      * @brief Assemble system matrices
@@ -183,10 +189,12 @@ private:
     mfem::ParGridFunction* eField_;
     mfem::ParGridFunction* bField_;
     mfem::ParGridFunction* dEdtField_;
+    mfem::ParBilinearForm* hCurlMassEpsilon_;
     mfem::ParBilinearForm* hDivMassMuInv_;
     mfem::ParBilinearForm* hCurlLosses_;
     mfem::ParMixedBilinearForm* weakCurlMuInv_;
     mfem::ParDiscreteLinearOperator* curlOp_;
+    mfem::HypreParMatrix* massEpsilonMatrix_;
     mfem::HypreParMatrix* massMuInvMatrix_;
     mfem::HypreParMatrix* lossMatrix_;
     mfem::HypreParMatrix* negCurlMatrix_;
@@ -201,10 +209,12 @@ private:
     mfem::GridFunction* eField_;
     mfem::GridFunction* bField_;
     mfem::GridFunction* dEdtField_;
+    mfem::BilinearForm* hCurlMassEpsilon_;
     mfem::BilinearForm* hDivMassMuInv_;
     mfem::BilinearForm* hCurlLosses_;
     mfem::MixedBilinearForm* weakCurlMuInv_;
     mfem::DiscreteLinearOperator* curlOp_;
+    mfem::SparseMatrix* massEpsilonMatrix_;
     mfem::SparseMatrix* massMuInvMatrix_;
     mfem::SparseMatrix* lossMatrix_;
     mfem::SparseMatrix* negCurlMatrix_;
