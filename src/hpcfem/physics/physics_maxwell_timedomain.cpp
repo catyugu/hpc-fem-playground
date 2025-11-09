@@ -455,19 +455,17 @@ double PhysicsMaxwellTimeDomain::getEnergy() const
     // Electric field energy: 0.5 * E^T M_ε E
     // For simplicity, approximate with dot product (assumes identity mass matrix)
     // TODO: Use actual permittivity mass matrix
+    // Note: InnerProduct already does MPI_Allreduce
     energyE = 0.5 * mfem::InnerProduct(*eVec_, *eVec_);
     
     // Magnetic field energy: 0.5 * B^T M_μ B
     mfem::HypreParVector temp(hDivFESpace_);
     massMuInvMatrix_->Mult(*bVec_, temp);
+    // Note: InnerProduct already does MPI_Allreduce
     energyB = 0.5 * mfem::InnerProduct(*bVec_, temp);
     
-    // Sum across processors
-    double localEnergy = energyE + energyB;
-    double globalEnergy = 0.0;
-    MPI_Allreduce(&localEnergy, &globalEnergy, 1, MPI_DOUBLE, MPI_SUM, 
-                  pmesh_->GetComm());
-    return globalEnergy;
+    // InnerProduct already returns global sum, no need for additional Allreduce
+    return energyE + energyB;
 #else
     // Serial version
     energyE = 0.5 * (*eField_) * (*eField_);
