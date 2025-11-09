@@ -271,6 +271,269 @@ TEST_F(MaxwellTimeDomainParallelTest, CurrentSourceRadiation)
     EXPECT_GE(finalEnergy, 0.0) << "Energy should be non-negative";
 }
 
+
+/**
+ * @brief Test 2c: Mixed boundary conditions
+ * 
+ * Tests configuration with Dirichlet, ABC, and natural BCs
+ * on different surfaces simultaneously.
+ */
+TEST_F(MaxwellTimeDomainParallelTest, MixedBoundaryConditions)
+{
+    const int order = 1;
+    const double dt = 5e-12;
+    const int numSteps = 20;
+    
+    // Set up mixed BC: ABC on boundary 1, Dirichlet on boundary 2
+    Array<int> abcMarkers(1);
+    abcMarkers[0] = 1;  // ABC on first boundary
+    
+    Array<int> dbcMarkers(1);
+    dbcMarkers[0] = 2;  // Dirichlet on second boundary
+    
+    PhysicsMaxwellTimeDomain solver(pmesh, order,
+                                     uniformPermittivity,
+                                     uniformPermeabilityInv,
+                                     nullptr, nullptr,
+                                     abcMarkers, dbcMarkers,
+                                     zeroBoundary);
+    
+    // Set initial E-field
+    class InitialEField : public VectorCoefficient
+    {
+    public:
+        InitialEField() : VectorCoefficient(3) {}
+        void Eval(Vector& V, ElementTransformation& T, const IntegrationPoint& ip)
+        {
+            double x[3];
+            Vector transip(x, 3);
+            T.Transform(ip, transip);
+            V.SetSize(3);
+            V(0) = 0.0;
+            V(1) = 0.0;
+            V(2) = sin(M_PI * x[0]) * sin(M_PI * x[1]);
+        }
+    };
+    
+    InitialEField e0;
+    solver.setInitialEField(e0);
+    
+    double initialEnergy = solver.getEnergy();
+    
+    Vector* E = solver.getEVector();
+    Vector* B = solver.getBVector();
+    Vector dBdt(B->Size());
+    Vector dEdt(E->Size());
+    
+    for (int step = 0; step < numSteps; step++)
+    {
+        solver.getNegCurlOperator()->Mult(*E, dBdt);
+        B->Add(dt, dBdt);
+        
+        solver.Mult(*B, dEdt);
+        E->Add(dt, dEdt);
+        
+        solver.syncGridFunctions();
+    }
+    
+    double finalEnergy = solver.getEnergy();
+    
+    int myRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+    
+    if (myRank == 0)
+    {
+        std::cout << "Mixed BC - Initial: " << initialEnergy 
+                 << ", Final: " << finalEnergy << std::endl;
+    }
+    
+    // With ABC and Dirichlet, energy should decrease (absorbed/constrained)
+    EXPECT_GT(initialEnergy, 0.0) << "Initial energy should be positive";
+    EXPECT_GE(finalEnergy, 0.0) << "Final energy should be non-negative";
+}
+
+/**
+ * @brief Test 2d: Source and loss interaction
+ * 
+ * Verifies energy balance when both source injection and
+ * loss dissipation are present simultaneously.
+ */
+TEST_F(MaxwellTimeDomainParallelTest, SourceAndLossInteraction)
+{
+    const int order = 1;
+    const double dt = 5e-12;
+    const int numSteps = 600;  // Run to 3ns to see dissipation well after 1ns pulse
+    
+    // Create solver with both source and losses
+    Array<int> emptyArray;
+    PhysicsMaxwellTimeDomain solver(pmesh, order,
+                                     uniformPermittivity,
+                                     uniformPermeabilityInv,
+                                     lossyConductivity,  // Lossy
+                                     gaussianPulse,      // With source
+                                     emptyArray, emptyArray,
+                                     nullptr);
+    
+    // Start with zero fields
+    Vector* E = solver.getEVector();
+    Vector* B = solver.getBVector();
+    *E = 0.0;
+    *B = 0.0;
+    
+    Vector dBdt(B->Size());
+    Vector dEdt(E->Size());
+    
+    double t = 0.0;
+    double maxEnergy = 0.0;
+    double energyAtSourcePeak = 0.0;
+    
+    int myRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+    
+    for (int step = 0; step < numSteps; step++)
+    {
+        // Update source time
+        solver.updateSourceTime(t);
+        
+        // Time stepping with implicit solve for losses
+        solver.getNegCurlOperator()->Mult(*E, dBdt);
+        B->Add(dt, dBdt);
+        
+        solver.implicitSolve(dt, *B, dEdt);
+        E->Add(dt, dEdt);
+        
+        t += dt;
+        
+        solver.syncGridFunctions();
+        double energy = solver.getEnergy();
+        
+        if (energy > maxEnergy)
+        {
+            maxEnergy = energy;
+        }
+        
+        // Record energy near source peak (t ~ 1ns)
+        if (fabs(t - 1e-9) < 5*dt)
+        {
+            energyAtSourcePeak = energy;
+        }
+        
+        if (myRank == 0 && step % 50 == 0)
+        {
+            std::cout << "Step " << step << ", t = " << t 
+                     << ", Energy: " << energy << std::endl;
+        }
+    }
+    
+    double finalEnergy = solver.getEnergy();
+    
+    if (myRank == 0)
+    {
+        std::cout << "Max energy: " << maxEnergy << std::endl;
+        std::cout << "Energy at source peak: " << energyAtSourcePeak << std::endl;
+        std::cout << "Final energy: " << finalEnergy << std::endl;
+    }
+    
+    // Source should inject energy initially
+    EXPECT_GT(maxEnergy, 0.0) << "Source should inject energy";
+    
+    // But losses should dissipate it after source stops
+    // (final energy should be less than peak if losses are working)
+    EXPECT_LT(finalEnergy, maxEnergy) << "Losses should dissipate energy after source";
+    EXPECT_GE(finalEnergy, 0.0) << "Energy should remain non-negative";
+}
+
+/**
+ * @brief Test 2e: CFL condition validation
+ * 
+ * Verifies that the computed CFL time step is correct and
+ * that stability is maintained when using it.
+ */
+TEST_F(MaxwellTimeDomainParallelTest, CFLConditionValidation)
+{
+    const int order = 1;
+    
+    Array<int> emptyArray;
+    PhysicsMaxwellTimeDomain solver(pmesh, order,
+                                     uniformPermittivity,
+                                     uniformPermeabilityInv,
+                                     nullptr, nullptr,
+                                     emptyArray, emptyArray,
+                                     nullptr);
+    
+    // Set initial E-field
+    class InitialEField : public VectorCoefficient
+    {
+    public:
+        InitialEField() : VectorCoefficient(3) {}
+        void Eval(Vector& V, ElementTransformation& T, const IntegrationPoint& ip)
+        {
+            double x[3];
+            Vector transip(x, 3);
+            T.Transform(ip, transip);
+            V.SetSize(3);
+            V(0) = 0.0;
+            V(1) = 0.0;
+            V(2) = sin(M_PI * x[0]) * sin(M_PI * x[1]);
+        }
+    };
+    
+    InitialEField e0;
+    solver.setInitialEField(e0);
+    
+    // Get CFL time step
+    double dtCFL = solver.getMaximumTimeStep();
+    
+    int myRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+    
+    if (myRank == 0)
+    {
+        std::cout << "CFL time step: " << dtCFL << " s" << std::endl;
+    }
+    
+    EXPECT_GT(dtCFL, 0.0) << "CFL time step should be positive";
+    EXPECT_LT(dtCFL, 1e-8) << "CFL time step should be reasonable for this mesh";
+    
+    // Test stability: use 50% of CFL time step (typical safety factor for forward Euler)
+    double dt = 0.5 * dtCFL;
+    double initialEnergy = solver.getEnergy();
+    
+    Vector* E = solver.getEVector();
+    Vector* B = solver.getBVector();
+    Vector dBdt(B->Size());
+    Vector dEdt(E->Size());
+    
+    int numSteps = 50;
+    bool remainedStable = true;
+    
+    for (int step = 0; step < numSteps; step++)
+    {
+        solver.getNegCurlOperator()->Mult(*E, dBdt);
+        B->Add(dt, dBdt);
+        
+        solver.Mult(*B, dEdt);
+        E->Add(dt, dEdt);
+        
+        solver.syncGridFunctions();
+        double energy = solver.getEnergy();
+        
+        // Check for instability (energy growing exponentially)
+        if (energy > initialEnergy * 10.0)
+        {
+            remainedStable = false;
+            if (myRank == 0)
+            {
+                std::cout << "Instability detected at step " << step 
+                         << ", energy: " << energy << std::endl;
+            }
+            break;
+        }
+    }
+    
+    EXPECT_TRUE(remainedStable) << "Solution should remain stable with 50% safety factor";
+}
+
 /**
  * @brief Test 3: Lossy material energy decay
  * 

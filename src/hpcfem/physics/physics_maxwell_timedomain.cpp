@@ -214,11 +214,12 @@ PhysicsMaxwellTimeDomain::~PhysicsMaxwellTimeDomain()
     delete negCurlMatrix_;
     delete weakCurlMatrix_;
 #else
-    delete massEpsilonMatrix_;
-    delete massMuInvMatrix_;
-    delete lossMatrix_;
-    delete negCurlMatrix_;
-    delete weakCurlMatrix_;
+    // Serial: some matrices created by Add() need to be deleted
+    if (lossMatrix_ != nullptr && lossMatrix_ != &(hCurlLosses_->SpMat()))
+    {
+        delete lossMatrix_;  // Created by Add() for ABC+conductivity
+    }
+    // Other matrices are owned by forms, don't delete
 #endif
 
     delete dEdtField_;
@@ -270,7 +271,7 @@ void PhysicsMaxwellTimeDomain::assembleMatrices()
     negCurlMatrix_ = curlOp_->ParallelAssemble();
     *negCurlMatrix_ *= -1.0;
 
-    // Loss matrix (if lossy)
+    // Loss matrix (if lossy or has ABC)
     if (isLossy_)
     {
         hCurlLosses_ = new mfem::ParBilinearForm(hCurlFESpace_);
@@ -279,15 +280,27 @@ void PhysicsMaxwellTimeDomain::assembleMatrices()
             hCurlLosses_->AddDomainIntegrator(
                 new mfem::VectorFEMassIntegrator(*materials_->getConductivityCoefficient()));
         }
-        if (boundaries_->hasAbsorbingBC())
-        {
-            // ABC contributes to loss matrix
-            mfem::ParBilinearForm* abcForm = boundaries_->getAbsorbingForm();
-            // TODO: Add ABC form to loss matrix
-        }
         hCurlLosses_->Assemble();
         hCurlLosses_->Finalize();
-        lossMatrix_ = hCurlLosses_->ParallelAssemble();
+        
+        mfem::HypreParMatrix* conductivityMatrix = hCurlLosses_->ParallelAssemble();
+        
+        // Add ABC contribution if present
+        if (boundaries_->hasAbsorbingBC())
+        {
+            // ABC form is already assembled in boundaries_
+            mfem::HypreParMatrix* abcMatrix = boundaries_->getAbsorbingForm()->ParallelAssemble();
+            
+            // Combine conductivity and ABC: M_loss = M_σ + M_ABC
+            lossMatrix_ = mfem::Add(1.0, *conductivityMatrix, 1.0, *abcMatrix);
+            
+            delete conductivityMatrix;
+            delete abcMatrix;
+        }
+        else
+        {
+            lossMatrix_ = conductivityMatrix;
+        }
     }
 #else
     // Serial version
@@ -331,7 +344,21 @@ void PhysicsMaxwellTimeDomain::assembleMatrices()
         }
         hCurlLosses_->Assemble();
         hCurlLosses_->Finalize();
-        lossMatrix_ = &(hCurlLosses_->SpMat());
+        
+        mfem::SparseMatrix* conductivityMatrix = &(hCurlLosses_->SpMat());
+        
+        // Add ABC contribution if present
+        if (boundaries_->hasAbsorbingBC())
+        {
+            mfem::SparseMatrix* abcMatrix = &(boundaries_->getAbsorbingForm()->SpMat());
+            
+            // Combine conductivity and ABC
+            lossMatrix_ = mfem::Add(1.0, *conductivityMatrix, 1.0, *abcMatrix);
+        }
+        else
+        {
+            lossMatrix_ = conductivityMatrix;
+        }
     }
 #endif
 }

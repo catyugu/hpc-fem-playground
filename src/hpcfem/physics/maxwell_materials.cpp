@@ -61,21 +61,24 @@ MaxwellMaterialProperties::MaxwellMaterialProperties(
 
     // Create impedance coefficient for ABC
     // η⁻¹ = √(ε/μ) = √(ε·μ⁻¹)
-    if (epsilonFunc_ != nullptr && muInvFunc_ != nullptr)
+    if (epsilonFunc_ != nullptr || muInvFunc_ != nullptr)
     {
-        // For spatially varying materials, need to compute impedance
-        // This is a simplified implementation - proper implementation
-        // would use TransformedCoefficient
-        // TODO: Implement proper spatially-varying impedance
-        etaInvCoef_ = nullptr;
+        // For spatially varying materials, use product and transform
+        // Create product coefficient: ε·μ⁻¹
+        mfem::ProductCoefficient* epsTimesMusInv = 
+            new mfem::ProductCoefficient(*epsilonCoef_, *muInvCoef_);
+        
+        // Apply sqrt transformation: √(ε·μ⁻¹) = η⁻¹
+        etaInvCoef_ = new mfem::TransformedCoefficient(
+            epsTimesMusInv, [](double x) { return sqrt(x); });
+        
+        // Note: TransformedCoefficient takes ownership of the coefficient
     }
     else
     {
         // For uniform materials, can compute directly
-        double eps = (epsilonFunc_ == nullptr) ? EPSILON_0 : 
-                     epsilonFunc_(mfem::Vector(3));
-        double muInv = (muInvFunc_ == nullptr) ? (1.0 / MU_0) : 
-                       muInvFunc_(mfem::Vector(3));
+        double eps = EPSILON_0;
+        double muInv = 1.0 / MU_0;
         double etaInv = sqrt(eps * muInv);
         etaInvCoef_ = new mfem::ConstantCoefficient(etaInv);
     }
