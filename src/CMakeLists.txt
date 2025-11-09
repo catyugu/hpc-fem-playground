@@ -2,6 +2,10 @@
 add_library(hpcfem
     hpcfem/physics/physics_cavity_eigen.cpp
     hpcfem/physics/physics_waveguide_eigen.cpp
+    hpcfem/physics/physics_maxwell_timedomain.cpp
+    hpcfem/physics/maxwell_materials.cpp
+    hpcfem/physics/maxwell_sources.cpp
+    hpcfem/physics/maxwell_boundary.cpp
     hpcfem/solvers/solver_hypre_amg.cpp
 )
 

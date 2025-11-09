@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28
+**Last Updated:** 2025-11-09
 
 ## Namespaces
 
@@ -29,6 +29,33 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
   - **Equation:** Maxwell eigenvalue problem with PEC boundaries
   - **Key Feature:** Uses Nedelec elements and HypreAMS preconditioner
   - **Application:** Waveguide mode analysis, S-parameter port definitions
+
+- `PhysicsWaveguideEigen` - 2D waveguide port eigenmode solver (src/hpcfem/physics/physics_waveguide_eigen.hpp/cpp)
+  - **Purpose:** Solves 2D scalar Helmholtz eigenproblem for TE/TM modes
+  - **Equation:** -∇²ψ = k_c² ψ on port cross-section
+  - **Key Feature:** Supports both TE and TM mode types
+  - **Application:** Waveguide port definitions, mode matching
+
+- `PhysicsMaxwellTimeDomain` - Time-domain Maxwell solver (src/hpcfem/physics/physics_maxwell_timedomain.hpp/cpp)
+  - **Purpose:** Solves coupled first-order Maxwell equations in time domain
+  - **Equations:** ε∂E/∂t = ∇×(μ⁻¹B) - σE - J; ∂B/∂t = -∇×E
+  - **Key Feature:** Mixed H(curl)/H(div) formulation with energy conservation
+  - **Application:** Full-wave electromagnetic simulation, transient analysis
+
+- `MaxwellMaterialProperties` - Material coefficient manager (src/hpcfem/physics/maxwell_materials.hpp/cpp)
+  - **Purpose:** Manages ε, μ, σ coefficients for Maxwell solver
+  - **Key Feature:** Supports spatially-varying materials
+  - **Application:** Helper class for PhysicsMaxwellTimeDomain
+
+- `MaxwellSourceTerms` - Current density source manager (src/hpcfem/physics/maxwell_sources.hpp/cpp)
+  - **Purpose:** Manages time-dependent current density J(x,t)
+  - **Key Feature:** Time-dependent vector coefficient
+  - **Application:** Helper class for PhysicsMaxwellTimeDomain
+
+- `MaxwellBoundaryConditions` - Boundary condition handler (src/hpcfem/physics/maxwell_boundary.hpp/cpp)
+  - **Purpose:** Manages various BC types (Natural, Dirichlet, ABC)
+  - **Key Feature:** Supports Sommerfeld absorbing BC
+  - **Application:** Helper class for PhysicsMaxwellTimeDomain
   
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
@@ -40,6 +67,14 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 - `MockSolver` - Mock implementation of `SolverInterface` for testing (test_solver_interface_mock.cpp)
 - `MockPhysics` - Mock implementation of `PhysicsInterface` for testing (test_physics_interface_mock.cpp)
+
+## Enums
+
+- `WaveguideModeType` - TE or TM mode type for 2D waveguide solver (src/hpcfem/physics/physics_waveguide_eigen.hpp)
+  - Values: `TE`, `TM`
+
+- `MaxwellBoundaryType` - Boundary condition types for Maxwell solver (src/hpcfem/physics/maxwell_boundary.hpp)
+  - Values: `Natural`, `Dirichlet`, `Absorbing`, `PML`, `Port`
 
 ## Files by Category
 
