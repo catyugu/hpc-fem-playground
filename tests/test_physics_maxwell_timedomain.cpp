@@ -196,17 +196,9 @@ TEST_F(MaxwellTimeDomainParallelTest, EnergyConservationLosslessCavity)
  * 
  * Verifies that a time-dependent current source produces
  * electromagnetic radiation with expected field patterns.
- * 
- * NOTE: This test is currently skipped because source term time integration
- * is not fully implemented. The source term needs to be updated at each
- * time step for proper energy injection.
  */
 TEST_F(MaxwellTimeDomainParallelTest, CurrentSourceRadiation)
 {
-    GTEST_SKIP() << "Source term time integration not yet implemented - "
-                 << "see TODO in maxwell_sources.cpp";
-    
-    /* Implementation for when source integration is complete:
     const int order = 1;
     const double dt = 5e-12;  // 5 ps
     const int numSteps = 50;
@@ -238,8 +230,8 @@ TEST_F(MaxwellTimeDomainParallelTest, CurrentSourceRadiation)
     
     for (int step = 0; step < numSteps; step++)
     {
-        // Update source time
-        // Note: sources_ needs to be updated - we'll check energy growth instead
+        // Update source term for current time
+        solver.updateSourceTime(t);
         
         // Time stepping
         solver.getNegCurlOperator()->Mult(*E, dBdt);
@@ -266,7 +258,6 @@ TEST_F(MaxwellTimeDomainParallelTest, CurrentSourceRadiation)
     }
     
     // Verify that energy increased (source added energy to system)
-    // For this test, we just check that fields are non-zero
     double finalEnergy = solver.getEnergy();
     
     if (myRank == 0)
@@ -275,15 +266,9 @@ TEST_F(MaxwellTimeDomainParallelTest, CurrentSourceRadiation)
         std::cout << "Max energy: " << maxEnergy << std::endl;
     }
     
-    // With current implementation (source term not fully integrated in time stepping),
-    // energy may stay near zero. This is expected and documented.
-    // TODO: Implement proper source term time integration
-    // For now, just verify test runs without crashing and energy is non-negative
+    // Verify source injected energy into the system
+    EXPECT_GT(maxEnergy, 0.0) << "Source should have injected energy";
     EXPECT_GE(finalEnergy, 0.0) << "Energy should be non-negative";
-    EXPECT_GE(maxEnergy, 0.0) << "Max energy should be non-negative";
-    
-    // Note: In a full implementation, we would expect: EXPECT_GT(maxEnergy, 0.0)
-    */
 }
 
 /**
