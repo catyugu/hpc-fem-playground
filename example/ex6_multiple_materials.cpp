@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
     // available on all MPI implementations (some may modify argc/argv).
     const char *mesh_file = "testdata/testmesh_package.mesh";
     const char *output_dir = "results/ex6_multiple_materials";
-    int order = 1;
+    int order = 2;
 
     if (argc > 1)
     {
@@ -378,6 +378,8 @@ int main(int argc, char *argv[])
         std::cout << "  System assembled." << std::endl;
     }
 
+    std::chrono::high_resolution_clock::time_point assembly_end = std::chrono::high_resolution_clock::now();
+
     // ============================================================
     // STEP 8: APPLY DIRICHLET BOUNDARY CONDITIONS
     // ============================================================
@@ -461,7 +463,9 @@ int main(int argc, char *argv[])
         std::cout << "  Max: " << T_max << " K" << std::endl;
         std::cout << "  Avg: " << T_avg << " K" << std::endl;
         std::cout << "========================================" << std::endl;
-        std::cout << "Solving time: " << std::chrono::duration_cast<std::chrono::milliseconds>(solving_end - solving_start).count() << " ms" << std::endl;
+        std::cout << "Total time: " << std::chrono::duration_cast<std::chrono::milliseconds>(solving_end - solving_start).count() << " ms" << std::endl;
+        std::cout << "Assembly time: " << std::chrono::duration_cast<std::chrono::milliseconds>(assembly_end - solving_start).count() << " ms" << std::endl;
+        std::cout << "Solving time: " << std::chrono::duration_cast<std::chrono::milliseconds>(solving_end - assembly_end).count() << " ms" << std::endl;
     }
 
     // Sanity check
