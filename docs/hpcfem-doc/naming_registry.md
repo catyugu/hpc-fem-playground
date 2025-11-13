@@ -2,7 +2,7 @@
 
 This document tracks all classes, enums, structs, and namespaces in the `hpcfem` library to ensure naming uniqueness (Guideline #5).
 
-**Last Updated:** 2025-10-28
+**Last Updated:** 2025-11-09
 
 ## Namespaces
 
@@ -24,34 +24,42 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 ### Concrete Implementations
 
-- `ElectrostaticsPhysics` - Electrostatics physics (Poisson equation) (src/hpcfem/physics_electrostatics.hpp/cpp)
-  - **Implements:** `PhysicsInterface`
-  - **Equation:** ∇·(σ∇φ) = f
+- `PhysicsCavityEigen` - 3D Maxwell eigenvalue problem solver (src/hpcfem/physics/physics_cavity_eigen.hpp/cpp)
+  - **Purpose:** Solves ∇×∇×E = λE for electromagnetic cavity modes
+  - **Equation:** Maxwell eigenvalue problem with PEC boundaries
+  - **Key Feature:** Uses Nedelec elements and HypreAMS preconditioner
+  - **Application:** Waveguide mode analysis, S-parameter port definitions
 
-- `ThermalPhysics` - Thermal diffusion physics (src/hpcfem/physics_thermal.hpp/cpp)
-  - **Implements:** `PhysicsInterface`
-  - **Equation:** ∇·(κ∇T) = Q
+- `PhysicsWaveguideEigen` - 2D waveguide port eigenmode solver (src/hpcfem/physics/physics_waveguide_eigen.hpp/cpp)
+  - **Purpose:** Solves 2D scalar Helmholtz eigenproblem for TE/TM modes
+  - **Equation:** -∇²ψ = k_c² ψ on port cross-section
+  - **Key Feature:** Supports both TE and TM mode types
+  - **Application:** Waveguide port definitions, mode matching
 
-- `JouleHeatingPhysics` - Coupled electro-thermal Joule heating physics (src/hpcfem/physics_joule_heating.hpp/cpp)
-  - **Does NOT implement:** `PhysicsInterface` (uses BlockOperator, specialized interface)
-  - **Equation:** 2×2 block system `[K_e 0; C K_t][V; T] = [f_e; f_t]`
-  - **Key Feature:** Multiphysics with nonlinear Joule heating Q = σ|∇V|²
-  - **Nonlinearity:** Solved via Picard iteration with voltage-dependent thermal source
-  
-- `JouleHeatingCoefficient` - Joule heating source term coefficient (src/hpcfem/joule_heating_coefficient.hpp)
-  - **Extends:** `mfem::Coefficient`
-  - **Formula:** Q = σ|∇V|²
-  - **Purpose:** Evaluates nonlinear Joule heating power density at quadrature points
+- `PhysicsMaxwellTimeDomain` - Time-domain Maxwell solver (src/hpcfem/physics/physics_maxwell_timedomain.hpp/cpp)
+  - **Purpose:** Solves coupled first-order Maxwell equations in time domain
+  - **Equations:** ε∂E/∂t = ∇×(μ⁻¹B) - σE - J; ∂B/∂t = -∇×E
+  - **Key Feature:** Mixed H(curl)/H(div) formulation with energy conservation
+  - **Application:** Full-wave electromagnetic simulation, transient analysis
+
+- `MaxwellMaterialProperties` - Material coefficient manager (src/hpcfem/physics/maxwell_materials.hpp/cpp)
+  - **Purpose:** Manages ε, μ, σ coefficients for Maxwell solver
+  - **Key Feature:** Supports spatially-varying materials
+  - **Application:** Helper class for PhysicsMaxwellTimeDomain
+
+- `MaxwellSourceTerms` - Current density source manager (src/hpcfem/physics/maxwell_sources.hpp/cpp)
+  - **Purpose:** Manages time-dependent current density J(x,t)
+  - **Key Feature:** Time-dependent vector coefficient
+  - **Application:** Helper class for PhysicsMaxwellTimeDomain
+
+- `MaxwellBoundaryConditions` - Boundary condition handler (src/hpcfem/physics/maxwell_boundary.hpp/cpp)
+  - **Purpose:** Manages various BC types (Natural, Dirichlet, ABC)
+  - **Key Feature:** Supports Sommerfeld absorbing BC
+  - **Application:** Helper class for PhysicsMaxwellTimeDomain
   
 - `HypreAmgSolver` - HYPRE AMG solver wrapper (src/hpcfem/solver_hypre_amg.hpp/cpp)
   - **Implements:** `SolverInterface`
   - **Backend:** HYPRE BoomerAMG
-
-### Orchestration
-
-- `FemProblem` - Top-level FEM problem orchestrator (src/hpcfem/fem_problem.hpp/cpp)
-  - **Purpose:** Coordinates mesh, physics, and solver
-  - **Key Methods:** `assemble()`, `solve()`, `getSolution()`
 
 ## Test Classes (Not in Library)
 
@@ -60,13 +68,13 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `MockSolver` - Mock implementation of `SolverInterface` for testing (test_solver_interface_mock.cpp)
 - `MockPhysics` - Mock implementation of `PhysicsInterface` for testing (test_physics_interface_mock.cpp)
 
-## Structs
-
-(None yet)
-
 ## Enums
 
-(None yet)
+- `WaveguideModeType` - TE or TM mode type for 2D waveguide solver (src/hpcfem/physics/physics_waveguide_eigen.hpp)
+  - Values: `TE`, `TM`
+
+- `MaxwellBoundaryType` - Boundary condition types for Maxwell solver (src/hpcfem/physics/maxwell_boundary.hpp)
+  - Values: `Natural`, `Dirichlet`, `Absorbing`, `PML`, `Port`
 
 ## Files by Category
 
@@ -78,11 +86,10 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 
 ### Physics Modules
 
-- `src/hpcfem/physics/physics_electrostatics.hpp` - Electrostatics physics header
-- `src/hpcfem/physics/physics_electrostatics.cpp` - Electrostatics physics implementation
-- `src/hpcfem/physics/physics_thermal.hpp` - Thermal diffusion physics header
-- `src/hpcfem/physics/physics_thermal.cpp` - Thermal diffusion physics implementation
-- `src/hpcfem/physics/physics_joule_heating.hpp` - Joule heating coupled physics header
+- `src/hpcfem/physics/physics_cavity_eigen.hpp` - 3D Maxwell eigenvalue solver header
+- `src/hpcfem/physics/physics_cavity_eigen.cpp` - 3D Maxwell eigenvalue solver implementation
+- `src/hpcfem/physics/physics_waveguide_eigen.hpp` - 2D waveguide eigenvalue solver header
+- `src/hpcfem/physics/physics_waveguide_eigen.cpp` - 2D waveguide eigenvalue solver implementation
 
 ### Solver Modules
 
@@ -90,39 +97,23 @@ This document tracks all classes, enums, structs, and namespaces in the `hpcfem`
 - `src/hpcfem/solvers/solver_hypre_amg.hpp` - HYPRE AMG solver header
 - `src/hpcfem/solvers/solver_hypre_amg.cpp` - HYPRE AMG solver implementation
 
-### Helper/Coefficient Classes
-
-- `src/hpcfem/physics/joule_heating_coefficient.hpp` - Joule heating coefficient Q = σ|∇V|²
-
-### Problem Orchestration
-
-- `src/hpcfem/core/fem_problem.hpp` - FEM problem orchestrator header
-- `src/hpcfem/core/fem_problem.cpp` - FEM problem orchestrator implementation
-
 ### Tests
 
 - `tests/test_solver_interface.cpp` - Solver interface compilation test
 - `tests/test_solver_interface_mock.cpp` - Solver interface contract test
 - `tests/test_physics_interface_mock.cpp` - Physics interface contract test
 - `tests/test_solver_hypre_amg.cpp` - HYPRE AMG solver functional test
-- `tests/test_problem_abstraction.cpp` - End-to-end abstraction test
-- `tests/test_physics_electrostatics.cpp` - Electrostatics MMS test
-- `tests/test_physics_coupling.cpp` - Coupled physics test
-- `tests/test_physics_joule_heating_block.cpp` - Joule heating BlockOperator assembly test
+- `tests/test_physics_cavity_eigen.cpp` - 3D Maxwell eigenvalue problem test
+- `tests/test_physics_waveguide_eigen.cpp` - 2D waveguide eigenvalue problem test
 
 ### Examples
 
 - `example/ex0_cylinder_dirichlet.cpp` - Simple cylinder electrostatics
 - `example/ex1_cube_mixed_bc.cpp` - Cube with mixed boundary conditions
 - `example/ex2_rect_waveguide.cpp` - Rectangular waveguide
+- `example/ex2p_rect_waveguide_hypre.cpp` - Rectangular waveguide with HYPRE
 - `example/ex3_transient_heat.cpp` - Transient heat diffusion
 - `example/ex4_eigenvalue_laplacian.cpp` - Eigenvalue problem
 - `example/ex5_coupled_problem.cpp` - Coupled electro-thermal problem
-- `example/ex6_nonlinear_joule_heating.cpp` - Nonlinear Joule heating with Q = σ|∇V|²
+- `example/ex6_multiple_materials.cpp` - Nonlinear Joule heating with Q = σ|∇V|²
 
-### Benchmarks
-
-- `benchmark/poisson_scaling/main.cpp` - Poisson scaling benchmark
-- `benchmark/joule_heating_solvers/main.cpp` - Joule heating solver comparison
-
----

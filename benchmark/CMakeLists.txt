@@ -1,3 +1,11 @@
-# Benchmark applications
-
-add_subdirectory(poisson_scaling)
+file(GLOB_RECURSE BENCHMARK_SRCS "*.cpp")
+foreach(BENCHMARK_SRC IN LISTS BENCHMARK_SRCS)
+    get_filename_component(BENCHMARK_NAME ${BENCHMARK_SRC} NAME_WE)
+    add_executable(${BENCHMARK_NAME} ${BENCHMARK_SRC})
+    target_link_libraries(${BENCHMARK_NAME} PRIVATE hpcfem)
+    target_compile_features(${BENCHMARK_NAME} PRIVATE cxx_std_17)
+    if(MFEM_USE_MPI)
+        find_package(MPI REQUIRED)
+        target_link_libraries(${BENCHMARK_NAME} PRIVATE MPI::MPI_CXX)
+    endif()
+endforeach()

@@ -305,15 +305,28 @@ def write_mfem_mesh(nodes, blocks, outpath, sdim=None):
 			face_map.setdefault(key, []).append((fv, attr))
 
 	# boundary faces are those that appear only once among all element faces
+	# ALSO include interior faces with explicit attributes (for multiphysics interfaces)
 	boundaries = []
+	interior_faces_added = set()
+	
 	for key, entries in face_map.items():
 		if len(entries) == 1:
+			# True exterior boundary face
 			fv, parent_attr = entries[0]
 			# prefer explicit attribute from parsed face blocks when present
 			attr = face_attr_map.get(key, parent_attr)
 			# determine face geom by number of vertices
 			fg = 2 if len(fv) == 3 else (3 if len(fv) == 4 else (1 if len(fv) == 2 else 0))
 			boundaries.append((attr, fg, fv))
+		elif key in face_attr_map:
+			# Interior face with explicit attribute (e.g., material interface)
+			# Add it as a boundary element for multiphysics coupling
+			if key not in interior_faces_added:
+				fv = entries[0][0]  # Use first occurrence's vertex ordering
+				attr = face_attr_map[key]
+				fg = 2 if len(fv) == 3 else (3 if len(fv) == 4 else (1 if len(fv) == 2 else 0))
+				boundaries.append((attr, fg, fv))
+				interior_faces_added.add(key)
 
 	with open(outpath, 'w') as f:
 		f.write('MFEM mesh v1.0\n\n')

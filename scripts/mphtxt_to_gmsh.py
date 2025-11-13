@@ -274,8 +274,16 @@ def write_msh(nodes, elements, outpath, sdim=None):
         for idx, e in enumerate(block['elems']):
             tag = 0
             if geom is not None:
-                # use geometric entity index + 1 as first tag (physical group id)
-                tag = geom[idx] + 1
+                # NOTE: In the COMSOL-style mphtxt files the domain (volumetric)
+                # geometric entity indices are 1-based, but boundary/surface
+                # geometric entity indices are 0-based. To preserve correct
+                # attributes when writing a Gmsh .msh we therefore only add
+                # +1 for boundary-like element types (points/lines/tris/quads).
+                # Volumetric element "regions" (tets/prisms/hexa) are left as-is.
+                if gmsh_type in (15, 1, 2, 3):  # point, line, triangle, quad
+                    tag = geom[idx] + 1
+                else:
+                    tag = geom[idx]
             # validate discovered gmsh_type
             if gmsh_type == 0:
                 raise RuntimeError(f"Unknown/unsupported element block type '{block['type_name']}' with {block['nverts']} vertices (block {block_idx})")

@@ -1,6 +1,6 @@
-share
 .vscode
 cmake-build-debug
 cmake-build-release
 results
 scripts/__pycache__
+largefiles

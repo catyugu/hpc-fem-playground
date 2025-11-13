@@ -1,211 +1,245 @@
+// Simple, clean 3D driven-frequency rectangular waveguide example.
+// Solves: curl (mu^{-1} curl E) - k0^2 eps E = RHS (frequency domain)
+// - Nedelec H(curl) elements, complex sesquilinear form
+// - Port 3: driven TE10 (Dirichlet tangential), Port 4: modal termination
+
 #include "mfem.hpp"
 #include <fstream>
 #include <iostream>
-#include <cmath>
+#include <complex>
+#include <string>
 
-// Rectangular waveguide example (frequency-domain, single-frequency excitation)
-// - Uses Nedelec (ND) finite elements (H(curl))
-// - Ports: boundary attribute 3 (input) and 4 (output/termination)
-// - PEC on attributes 1,2,5,6 (tangential E = 0)
-// - Modal excitation: TE10 on port 1 (simple analytical profile)
-// - Mesh: testdata/testmesh_bar.mesh
-// - Output: results/ex2_rect_waveguide
-
+using namespace std;
 using namespace mfem;
 
+// Simple TE10 modal profile (real-valued) on a rectangular port:
 class TE10Modal : public VectorCoefficient
 {
-private:
-    double a_; // width (x)
-    double b_; // height (y)
-    double amp_;
-
 public:
-    // VectorCoefficient expects the vector dimension (3 for 3D)
-    TE10Modal(double a, double b, double amp)
-        : VectorCoefficient(3), a_(a), b_(b), amp_(amp) {}
-
-    // Evaluate using physical coordinates via the ElementTransformation
-    void Eval(Vector &V, ElementTransformation &T, const IntegrationPoint &ip)
+    TE10Modal(double a, double amp = 1.0) : VectorCoefficient(3), a_(a), amp_(amp) {}
+    void Eval(Vector &V, ElementTransformation &T, const IntegrationPoint &ip) override
     {
-        Vector X(3);
-        T.Transform(ip, X);
-        double x = X(0);
-        double y = X(1);
+        Vector X(3); T.Transform(ip, X);
+        const double x = X(0);
         V.SetSize(3);
-        // TE10 dominant transverse-E field (approx.): E = (0, E_y, 0)
-        // E_y ~ sin(pi * x / a)
-        double Ey = std::sin(M_PI * x / a_);
-        V(0) = 0.0;       // E_x
-        V(1) = amp_ * Ey; // E_y
-        V(2) = 0.0;       // E_z
+        V(0) = 0.0;
+        V(1) = amp_ * sin(M_PI * x / a_); // Ey shape of TE10
+        V(2) = 0.0;
     }
+private:
+    double a_, amp_;
+};
+
+// Modal admittance matrix = Y * (emode * emode^T)
+class ModalMatrixCoefficient : public MatrixCoefficient
+{
+public:
+    ModalMatrixCoefficient(int dim, VectorCoefficient &mode, double Y)
+        : MatrixCoefficient(dim), mode_(&mode), Y_(Y) {}
+    void Eval(DenseMatrix &M, ElementTransformation &T, const IntegrationPoint &ip) override
+    {
+        Vector e(3); mode_->Eval(e, T, ip);
+        M.SetSize(3,3);
+        for (int i=0;i<3;i++) for (int j=0;j<3;j++) M(i,j) = Y_ * e(i) * e(j);
+    }
+private:
+    VectorCoefficient *mode_;
+    double Y_;
 };
 
 int main(int argc, char *argv[])
 {
-
     const char *mesh_file = "testdata/testmesh_bar.mesh";
     const char *output_dir = "results/ex2_rect_waveguide";
-    if (argc > 1)
-    {
-        mesh_file = argv[1];
-    }
-    if (argc > 2)
-    {
-        output_dir = argv[2];
-    }
+    if (argc > 1) mesh_file = argv[1];
+    if (argc > 2) output_dir = argv[2];
 
-    // Physical & frequency parameters
-    const double a = 0.01016;      // x length (m)
-    const double b = 0.02286;      // y length (m)
-    const double freq = 10e9;      // 10 GHz
-    const double c0 = 299792458.0; // speed of light
+    // Physical parameters (10 GHz rectangular waveguide, WR-90-ish)
+    const double a = 0.02286;      // width (x)
+    const double b = 0.01016;      // height (y)
+    const double freq = 10e9;
+    const double c0 = 299792458.0;
     const double omega = 2.0 * M_PI * freq;
-    const double k0 = omega / c0; // free-space wavenumber
-    const double eps_r = 1.0;     // relative permittivity (vacuum)
-    const double mu_r = 1.0;      // relative permeability
+    const double k0 = omega / c0;
+    const double eps_r = 1.0;
+    const double mu_r = 1.0;
 
-    // Finite element order
+    // FE order (small for testing)
     int order = 1;
 
     // Read mesh
     Mesh mesh(mesh_file);
-    int dim = mesh.Dimension();
-    if (dim != 3)
+    if (mesh.Dimension() != 3)
     {
-        std::cout << "ex2_rect_waveguide requires a 3D mesh. Mesh dimension: " << dim << std::endl;
+        cerr << "Error: mesh must be 3D." << endl;
         return 1;
     }
 
-    std::cout << "Mesh loaded: " << mesh.GetNE() << " elements." << std::endl;
-
-    // Debug: report boundary attribute counts
-    int nbdr = mesh.GetNBE();
-    Array<int> bdr_attr_counts(mesh.bdr_attributes.Max());
-    bdr_attr_counts = 0;
-    for (int be = 0; be < nbdr; be++)
-    {
-        Element *b = mesh.GetBdrElement(be);
-        int a = b->GetAttribute();
-        if (a >= 1 && a <= bdr_attr_counts.Size())
-        {
-            bdr_attr_counts[a - 1]++;
-        }
-    }
-    std::cout << "Boundary elements: " << nbdr << std::endl;
-    for (int i = 0; i < bdr_attr_counts.Size(); i++)
-    {
-        if (bdr_attr_counts[i] > 0)
-        {
-            std::cout << "  attr " << (i + 1) << ": " << bdr_attr_counts[i] << " faces" << std::endl;
-        }
-    }
-
-    // ND (Nedelec) finite element space for H(curl)
-    ND_FECollection fec(order, dim);
+    // H(curl) space
+    ND_FECollection fec(order, 3);
     FiniteElementSpace fes(&mesh, &fec);
 
-    std::cout << "Number of H(curl) dofs: " << fes.GetTrueVSize() << std::endl;
+    cout << "Mesh elements: " << mesh.GetNE()
+         << ", H(curl) true DOFs: " << fes.GetTrueVSize() << endl;
 
-    // Bilinear form: curl-curl - k0^2 * eps * I
-    BilinearForm aform(&fes);
-    ConstantCoefficient one_over_mu(1.0 / mu_r);
-    aform.AddDomainIntegrator(new CurlCurlIntegrator(one_over_mu));
-    // mass term with negative sign to form (curl curl - k^2 eps) weak form
-    double mass_coef_val = -(k0 * k0 * eps_r);
-    ConstantCoefficient mass_coef(mass_coef_val);
-    aform.AddDomainIntegrator(new VectorFEMassIntegrator(mass_coef));
+    // Complex sesquilinear form and complex RHS
+    SesquilinearForm sform(&fes);
+    ComplexLinearForm rhs(&fes);
 
-    // Solution container
-    GridFunction x(&fes);
+    // ComplexGridFunction to hold Dirichlet boundary (incident) values
+    ComplexGridFunction x(&fes);
     x = 0.0;
 
-    // Essential (Dirichlet) BCs:
-    // - PEC on attributes 1,2,5,6 (tangential E = 0)
-    // - Ports on attributes 3 (drive) and 4 (termination)
-    Array<int> ess_bdr(mesh.bdr_attributes.Max());
-    ess_bdr = 0;
-    // PEC (set to zero tangential E)
-    ess_bdr[1 - 1] = 1;
-    ess_bdr[2 - 1] = 1;
-    ess_bdr[5 - 1] = 1;
-    ess_bdr[6 - 1] = 1;
-    // Ports (will be projected below)
-    ess_bdr[3 - 1] = 1; // port 3: driven
-    ess_bdr[4 - 1] = 1; // port 4: termination
+    // Essential BCs: PEC on walls (attributes 1,2,5,6) and driven port 3
+    Array<int> ess_bdr(mesh.bdr_attributes.Max()); ess_bdr = 0;
+    // mark typical PEC faces (adjust to your mesh if different)
+    if (ess_bdr.Size() >= 6)
+    {
+        ess_bdr[0] = 1; // attr 1
+        ess_bdr[1] = 1; // attr 2
+        ess_bdr[4] = 1; // attr 5
+        ess_bdr[5] = 1; // attr 6
+    }
+    // drive port (attribute 3)
+    if (ess_bdr.Size() >= 3) ess_bdr[2] = 1;
 
     Array<int> ess_tdof_list;
     fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
 
-    // Project port fields
-    // Drive amplitude (arbitrary scale)
-    double amplitude = 1.0;
-    TE10Modal te10(a, b, amplitude);
-    Array<int> port1(mesh.bdr_attributes.Max());
-    port1 = 0;
-    port1[1 - 1] = 1;
-    // For H(curl) (ND) spaces, project the tangential component on the boundary
-    // Drive port: attribute 3
-    Array<int> port3(mesh.bdr_attributes.Max());
-    port3 = 0;
-    port3[3 - 1] = 1;
-    x.ProjectBdrCoefficientTangent(te10, port3);
+    // Project modal excitation on port 3: real TE10, imag = 0
+    TE10Modal te10(a, 1.0);
+    Array<int> port3(mesh.bdr_attributes.Max()); port3 = 0; if (port3.Size()>=3) port3[2]=1;
+    x.real().ProjectBdrCoefficientTangent(te10, port3);
+    // imag part zero (already zero)
 
-    // Port 6 set to zero (termination)
-    // Termination port: attribute 4 (set to zero tangential field)
-    Array<int> port4(mesh.bdr_attributes.Max());
-    port4 = 0;
-    port4[4 - 1] = 1;
-    // Create a zero vector coefficient for termination
-    Vector zvec(3);
-    zvec = 0.0;
-    VectorConstantCoefficient zero_vec(zvec);
-    x.ProjectBdrCoefficientTangent(zero_vec, port4);
+    // Domain integrators: curl-curl (mu^{-1}) and mass (-k0^2 eps)
+    ConstantCoefficient muinv(1.0 / mu_r);
+    ConstantCoefficient masscoef( - (k0*k0) * eps_r );
+    // Provide explicit zero-valued imaginary integrators so real/imag sparsity
+    // patterns match (needed by ComplexUMFPackSolver).
+    ConstantCoefficient zero_coeff(0.0);
+    sform.AddDomainIntegrator(new CurlCurlIntegrator(muinv),
+                             new CurlCurlIntegrator(zero_coeff));
+    sform.AddDomainIntegrator(new VectorFEMassIntegrator(masscoef),
+                             new VectorFEMassIntegrator(zero_coeff));
 
-    // Assemble
-    aform.Assemble();
+    // Modal termination on port 4 (attribute 4)
+    Array<int> port4(mesh.bdr_attributes.Max()); port4 = 0; if (port4.Size()>=4) port4[3]=1;
+    const double mu0 = 4.0*M_PI*1e-7;
+    complex<double> kz = sqrt(complex<double>(k0*k0 - (M_PI/a)*(M_PI/a)));
+    complex<double> Yc = kz / (omega * mu0); // modal admittance
+    double Y_real = Yc.real();
+    double Y_imag = Yc.imag();
+    ModalMatrixCoefficient modalReal(3, te10, Y_real);
+    ModalMatrixCoefficient modalImag(3, te10, Y_imag);
+    sform.AddBoundaryIntegrator(new MixedVectorMassIntegrator(modalReal),
+                                new MixedVectorMassIntegrator(modalImag),
+                                port4);
 
-    // Debug: report norm of the projected boundary GridFunction (should be non-zero)
-    std::cout << "Projected boundary x norm (L2): " << x.Norml2()
-              << ", Linf: " << x.Normlinf() << std::endl;
+    // Assemble and finalize (0 = integration order -> auto)
+    sform.Assemble(0); sform.Finalize(0);
+    rhs = 0.0; rhs.Assemble();
 
-    // Form linear system and solve (indefinite Helmholtz-like). We'll use GMRES.
-    SparseMatrix A;
-    Vector B, X;
-    LinearForm rhs(&fes);
-    rhs = 0.0;
-    rhs.Assemble();
-    aform.FormLinearSystem(ess_tdof_list, x, rhs, A, X, B);
+    // Form linear system and solve (GMRES on the returned operator)
+    OperatorHandle Aop;
+    Vector X, Bvec;
+    sform.FormLinearSystem(ess_tdof_list, x, rhs, Aop, X, Bvec);
 
-    std::cout << "Assembled matrix size: " << A.Height() << " x " << A.Width() << std::endl;
-    std::cout << "RHS (reduced) norm L2: " << B.Norml2() << ", Linf: " << B.Normlinf() << std::endl;
+    cout << "Assembled operator: " << Aop.Type()
+         << ", RHS norm = " << Bvec.Norml2() << endl;
 
-    std::cout << "Solving linear system (GMRES)..." << std::endl;
-    GSSmoother M(A);
+#ifdef MFEM_USE_SUITESPARSE
+    // Prefer direct complex UMFPACK when available
+    ComplexSparseMatrix *csm = Aop.As<ComplexSparseMatrix>();
+    if (csm)
+    {
+        cout << "Using ComplexUMFPack direct solver..." << endl;
+        ComplexUMFPackSolver csolver(*csm);
+        csolver.Mult(Bvec, X);
+    }
+    else
+    {
+        // Fallback to iterative solver if operator not assembled as ComplexSparseMatrix
+        GMRESSolver solver;
+        solver.SetOperator(*Aop.Ptr());
+        solver.SetRelTol(1e-6);
+        solver.SetAbsTol(1e-9);
+        solver.SetMaxIter(2000);
+        solver.SetKDim(min(100, (int)fes.GetTrueVSize()));
+        solver.SetPrintLevel(0);
+        solver.Mult(Bvec, X);
+    }
+#else
     GMRESSolver solver;
-    solver.SetOperator(A);
-    solver.SetRelTol(1e-8);
-    solver.SetAbsTol(1e-6);
-    solver.SetMaxIter(500);
-    solver.SetPrintLevel(1);
-    solver.SetPreconditioner(M);
-    solver.Mult(B, X);
+    solver.SetOperator(*Aop.Ptr());
+    solver.SetRelTol(1e-6);
+    solver.SetAbsTol(1e-9);
+    solver.SetMaxIter(2000);
+    solver.SetKDim(min(100, (int)fes.GetTrueVSize()));
+    solver.SetPrintLevel(0);
+    solver.Mult(Bvec, X);
+#endif
 
     // Recover solution
-    aform.RecoverFEMSolution(X, rhs, x);
+    sform.RecoverFEMSolution(X, rhs, x);
+    cout << "Solution recovered (real L2: " << x.real().Norml2()
+         << ", imag L2: " << x.imag().Norml2() << ")" << endl;
 
-    // Save to ParaView
+    // Simple modal projection on a port: <emode, E> / <emode, emode>
+    auto project_mode_on_port = [&](Array<int> &port_attr)->complex<real_t>
+    {
+        complex<real_t> num = 0.0;
+        double den = 0.0;
+        for (int be=0; be < fes.GetNBE(); ++be)
+        {
+            int attr = mesh.GetBdrAttribute(be);
+            if (attr < 1 || attr > port_attr.Size() || port_attr[attr-1]==0) continue;
+            const FiniteElement *bfe = fes.GetBE(be);
+            ElementTransformation *Tr = fes.GetBdrElementTransformation(be);
+            int qorder = max(2, 2*order+2);
+            const IntegrationRule &ir = IntRules.Get(Tr->GetGeometryType(), qorder);
+            for (int ipi=0; ipi < ir.GetNPoints(); ++ipi)
+            {
+                const IntegrationPoint &ip = ir.IntPoint(ipi);
+                Tr->SetIntPoint(&ip);
+                Vector em(3); te10.Eval(em, *Tr, ip);
+                Vector Er(3), Ei(3);
+                x.real().GetVectorValue(*Tr, ip, Er);
+                x.imag().GetVectorValue(*Tr, ip, Ei);
+                double dot_r = em * Er;
+                double dot_i = em * Ei;
+                complex<real_t> dot(dot_r, dot_i);
+                double w = ip.weight * Tr->Weight();
+                num += dot * w;
+                den += (em * em) * w;
+            }
+        }
+        if (den == 0.0) return complex<real_t>(0.0);
+        return num / den;
+    };
 
-    std::cout << "Saving solution to ParaView files..." << std::endl;
+    Array<int> p3 = port3; Array<int> p4 = port4;
+    complex<real_t> a_tot3 = project_mode_on_port(p3);
+    complex<real_t> a_tot4 = project_mode_on_port(p4);
+    complex<real_t> a_inc(1.0, 0.0);
+    complex<real_t> a_ref = a_tot3 - a_inc;
+    complex<real_t> S11 = (a_inc != complex<real_t>(0.0)) ? (a_ref / a_inc) : complex<real_t>(0.0);
+    complex<real_t> S21 = (a_inc != complex<real_t>(0.0)) ? (a_tot4 / a_inc) : complex<real_t>(0.0);
 
-    ParaViewDataCollection paraview_dc(output_dir, &mesh);
-    paraview_dc.SetLevelsOfDetail(1);
-    paraview_dc.RegisterField("E_field", &x);
-    paraview_dc.SetDataFormat(mfem::VTKFormat::ASCII);
-    paraview_dc.Save();
+    cout << "S11 = " << S11 << ", S21 = " << S21 << ", |S21| = " << abs(S21) << endl;
 
-    std::cout << "Done. Output in '" << output_dir << "'." << std::endl;
+    // Save fields for visualization (separate real/imag)
+    ParaViewDataCollection paraview(output_dir, &mesh);
+    paraview.RegisterField("E_real", &x.real());
+    paraview.RegisterField("E_imag", &x.imag());
+    paraview.SetDataFormat(mfem::VTKFormat::ASCII);
+    paraview.Save();
+
+    // Write S-params
+    ofstream of((string(output_dir)+"/s_parameters.txt").c_str());
+    of << "S11 " << S11.real() << " " << S11.imag() << "\n";
+    of << "S21 " << S21.real() << " " << S21.imag() << "\n";
+    of.close();
 
     return 0;
 }
