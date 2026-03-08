@@ -127,14 +127,17 @@ private:
     mutable mfem::Vector gradient_;
 };
 
-class ThermalBodyForceCoefficient : public mfem::VectorCoefficient {
+class ThermalExpansionGradLoadCoefficient : public mfem::VectorCoefficient {
 public:
-    ThermalBodyForceCoefficient()
-        : mfem::VectorCoefficient(3),
+        ThermalExpansionGradLoadCoefficient(const int dimension)
+                : mfem::VectorCoefficient(dimension * dimension),
+                    dimension_(dimension),
           temperature_(NULL),
           alpha_(NULL),
-          tref_(DEFAULT_REFERENCE_TEMPERATURE),
-          scale_(1.0) {}
+                    lambda_(NULL),
+                    mu_(NULL),
+                    referenceTemperature_(DEFAULT_REFERENCE_TEMPERATURE),
+                    loadVector_() {}
 
     void setTemperatureField(const mfem::GridFunction *temperature)
     {
@@ -146,39 +149,56 @@ public:
         alpha_ = alpha;
     }
 
-    void setReferenceTemperature(const double tref)
+    void setLambdaCoefficient(mfem::Coefficient *lambda)
     {
-        tref_ = tref;
+        lambda_ = lambda;
     }
 
-    void setScale(const double scale)
+    void setMuCoefficient(mfem::Coefficient *mu)
     {
-        scale_ = scale;
+        mu_ = mu;
+    }
+
+    void setReferenceTemperature(const double referenceTemperature)
+    {
+        referenceTemperature_ = referenceTemperature;
     }
 
     void Eval(mfem::Vector &vector,
               mfem::ElementTransformation &transformation,
               const mfem::IntegrationPoint &integrationPoint) override
     {
-        vector.SetSize(3);
+        vector.SetSize(dimension_ * dimension_);
         vector = 0.0;
-        if (temperature_ == NULL || alpha_ == NULL) {
+        if (temperature_ == NULL || alpha_ == NULL || lambda_ == NULL || mu_ == NULL) {
             return;
         }
 
+        transformation.SetIntPoint(&integrationPoint);
         const double temperatureValue = temperature_->GetValue(transformation, integrationPoint);
         const double alphaValue = alpha_->Eval(transformation, integrationPoint);
-        const double loadValue = scale_ * alphaValue * (temperatureValue - tref_);
-        vector(0) = loadValue;
-        vector(1) = loadValue;
-        vector(2) = loadValue;
+        const double lambdaValue = lambda_->Eval(transformation, integrationPoint);
+        const double muValue = mu_->Eval(transformation, integrationPoint);
+        const double deltaTemperature = temperatureValue - referenceTemperature_;
+
+        const double thermalModulus = (3.0 * lambdaValue + 2.0 * muValue) * alphaValue * deltaTemperature;
+
+        loadVector_.SetSize(dimension_ * dimension_);
+        loadVector_ = 0.0;
+        for (int i = 0; i < dimension_; ++i) {
+            loadVector_(i * dimension_ + i) = thermalModulus;
+        }
+        vector = loadVector_;
     }
 
 private:
+    int dimension_;
     const mfem::GridFunction *temperature_;
     mfem::Coefficient *alpha_;
-    double tref_;
-    double scale_;
+    mfem::Coefficient *lambda_;
+    mfem::Coefficient *mu_;
+    double referenceTemperature_;
+    mutable mfem::Vector loadVector_;
 };
 
 void fillMaterialVectors(const mfem::Mesh &mesh,
@@ -413,14 +433,14 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
     muCoefficient.setValues(muValues);
     AttributeScalarCoefficient thermalExpansionCoefficient;
     thermalExpansionCoefficient.setValues(thermalExpansion);
-
     JouleHeatCoefficient jouleHeatCoefficient;
     jouleHeatCoefficient.setConductivity(&conductivityCoefficient);
 
-    ThermalBodyForceCoefficient thermalBodyForceCoefficient;
-    thermalBodyForceCoefficient.setAlphaCoefficient(&thermalExpansionCoefficient);
-    thermalBodyForceCoefficient.setReferenceTemperature(DEFAULT_REFERENCE_TEMPERATURE);
-    thermalBodyForceCoefficient.setScale(1.0e7);
+    ThermalExpansionGradLoadCoefficient thermalExpansionLoadCoefficient(mesh.Dimension());
+    thermalExpansionLoadCoefficient.setAlphaCoefficient(&thermalExpansionCoefficient);
+    thermalExpansionLoadCoefficient.setLambdaCoefficient(&lambdaCoefficient);
+    thermalExpansionLoadCoefficient.setMuCoefficient(&muCoefficient);
+    thermalExpansionLoadCoefficient.setReferenceTemperature(DEFAULT_REFERENCE_TEMPERATURE);
 
     for (int iteration = 0; iteration < maxIterations; ++iteration) {
         mfem::GridFunction previousTemperature(temperature);
@@ -453,7 +473,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
         mfem::Vector electroX;
         mfem::Vector electroRhs;
         electroA.FormLinearSystem(electroEssTdof, potential, electroB, electroMat, electroX, electroRhs);
-        if (!LinearSystemSolver::solve(electroMat, electroRhs, electroX, errorMessage)) {
+        if (!LinearSystemSolver::solve(electroMat, electroRhs, electroX, 4000, 1e-10, errorMessage)) {
             return false;
         }
         electroA.RecoverFEMSolution(electroX, electroB, potential);
@@ -488,7 +508,8 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
         }
 
         mfem::PWConstCoefficient hCoefficient(convectionValues);
-        mfem::PWConstCoefficient hTinfCoefficient(convectionAux);
+        mfem::PWConstCoefficient tInfCoefficient(convectionAux);
+        mfem::ProductCoefficient hTimesTinfCoefficient(hCoefficient, tInfCoefficient);
 
         mfem::BilinearForm thermalA(&scalarSpace);
         thermalA.AddDomainIntegrator(new mfem::DiffusionIntegrator(thermalConductivityCoefficient));
@@ -496,7 +517,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
 
         mfem::LinearForm thermalB(&scalarSpace);
         thermalB.AddDomainIntegrator(new mfem::DomainLFIntegrator(jouleHeatCoefficient));
-        thermalB.AddBoundaryIntegrator(new mfem::BoundaryLFIntegrator(hTinfCoefficient), convectionBdr);
+        thermalB.AddBoundaryIntegrator(new mfem::BoundaryLFIntegrator(hTimesTinfCoefficient), convectionBdr);
 
         thermalA.Assemble();
         thermalB.Assemble();
@@ -506,12 +527,12 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
         mfem::Vector thermalX;
         mfem::Vector thermalRhs;
         thermalA.FormLinearSystem(thermalEssTdof, temperature, thermalB, thermalMat, thermalX, thermalRhs);
-        if (!LinearSystemSolver::solve(thermalMat, thermalRhs, thermalX, errorMessage)) {
+        if (!LinearSystemSolver::solve(thermalMat, thermalRhs, thermalX, 4000, 1e-10, errorMessage)) {
             return false;
         }
         thermalA.RecoverFEMSolution(thermalX, thermalB, temperature);
 
-        thermalBodyForceCoefficient.setTemperatureField(&temperature);
+        thermalExpansionLoadCoefficient.setTemperatureField(&temperature);
 
         mfem::Array<int> fixedBdr;
         mfem::Vector dummyValues;
@@ -532,7 +553,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
         mechanicsA.AddDomainIntegrator(new mfem::ElasticityIntegrator(lambdaCoefficient, muCoefficient));
 
         mfem::LinearForm mechanicsB(&vectorSpace);
-        mechanicsB.AddDomainIntegrator(new mfem::VectorDomainLFIntegrator(thermalBodyForceCoefficient));
+        mechanicsB.AddDomainIntegrator(new mfem::VectorDomainLFGradIntegrator(thermalExpansionLoadCoefficient));
 
         mechanicsA.Assemble();
         mechanicsB.Assemble();
@@ -548,7 +569,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh &mesh,
                                     mechanicsMat,
                                     mechanicsX,
                                     mechanicsRhs);
-        if (!LinearSystemSolver::solve(mechanicsMat, mechanicsRhs, mechanicsX, errorMessage)) {
+        if (!LinearSystemSolver::solve(mechanicsMat, mechanicsRhs, mechanicsX, 6000, 1e-9, errorMessage)) {
             return false;
         }
         mechanicsA.RecoverFEMSolution(mechanicsX, mechanicsB, displacement);

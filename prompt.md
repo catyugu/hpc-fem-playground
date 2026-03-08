@@ -69,9 +69,9 @@ Vtot	20[mV]	0.02 V	Applied voltage
 * 三个物理场：电势、固体传热、刚体力学。
 * 材料：Copper用于domain 1（板体），Titanium beta-21S用于domain 2-7，材料属性见于cases/busbar/material.xml
 * 边界条件：
-  * 电势：boundary 1电势为Vtot，boundary 8和15电势为0（接地）。其余外边界绝缘。
+  * 电势：boundary 43电势为Vtot，boundary 8和15电势为0（接地）。其余外边界绝缘。
   * 固体传热：boundary 1-7, 9-14, 16-42有对流换热边界，换热系数为htc，外界温度为293.15K，其余外边界热绝缘。
   * 刚体力学：boundary 8, 15, 43 为固定（零位移）。
-* 考虑焦耳热和热膨胀。
+* 考虑焦耳热和热应变。
 * COMSOL结果文件：在cases/busbar/result.txt。
 * 请将我们的结果和COMSOL结果文件进行对比。（这一步可以用Python等外部脚本完成，C++代码只需要能export标准格式的结果即可）
