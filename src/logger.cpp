@@ -66,9 +66,9 @@ void ScopedTimer::stop()
 {
     if (stopped_) return;
     stopped_ = true;
+    end_ = std::chrono::steady_clock::now();
     
-    auto end = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start_);
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_ - start_);
     double seconds = elapsed.count() / 1000000.0;
     
     std::ostringstream oss;
@@ -78,8 +78,8 @@ void ScopedTimer::stop()
 
 double ScopedTimer::getElapsedSeconds() const
 {
-    auto end = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start_);
+    auto endTime = stopped_ ? end_ : std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(endTime - start_);
     return elapsed.count() / 1000000.0;
 }
 

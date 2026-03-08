@@ -72,6 +72,7 @@ private:
     std::string label_;
     LogLevel level_;
     std::chrono::steady_clock::time_point start_;
+    std::chrono::steady_clock::time_point end_;
     bool stopped_ = false;
 };
 

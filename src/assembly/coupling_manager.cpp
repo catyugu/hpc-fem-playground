@@ -26,10 +26,23 @@ public:
 
 void CouplingManager::Impl::solveField(PhysicsFieldSolver* solver, const std::string& name)
 {
-    ScopedTimer timer(name);
+    ScopedTimer totalTimer(name);
+    
+    ScopedTimer bcTimer(name + " BC");
     solver->applyBoundaryConditions();
+    bcTimer.stop();
+    
+    ScopedTimer assembleTimer(name + " assemble");
     solver->assemble();
+    assembleTimer.stop();
+    
+    ScopedTimer solveTimer(name + " solve");
     solver->solve();
+    solveTimer.stop();
+    
+    Logger::log(LogLevel::Info, name + " breakdown: BC=" + bcTimer.getElapsedStr() 
+        + ", assemble=" + assembleTimer.getElapsedStr() 
+        + ", solve=" + solveTimer.getElapsedStr());
 }
 
 void CouplingManager::Impl::savePreviousSolutions()
