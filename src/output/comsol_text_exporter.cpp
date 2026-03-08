@@ -1,52 +1,34 @@
 #include "comsol_text_exporter.hpp"
+#include "logger.hpp"
 
 #include <fstream>
 #include <iomanip>
 
 namespace mpfem {
 
-bool ComsolTextExporter::write(const std::string &outputPath,
-                               const CoupledFieldResult &result,
-                               std::string &errorMessage)
+void ComsolTextExporter::write(const std::string &filePath, const CoupledFieldResult &result)
 {
-    errorMessage.clear();
+    Check(!result.coordinates.empty(), "ComsolTextExporter received empty result");
+    Check(result.electricPotential.size() == result.coordinates.size(), 
+          "ComsolTextExporter field size mismatch");
+    Check(result.temperature.size() == result.coordinates.size(), 
+          "ComsolTextExporter field size mismatch");
+    Check(result.displacement.size() == result.coordinates.size(), 
+          "ComsolTextExporter field size mismatch");
 
-    const std::size_t count = result.coordinates.size();
-    if (count == 0) {
-        errorMessage = "ComsolTextExporter received empty result";
-        return false;
+    std::ofstream file(filePath);
+    Check(file.is_open(), "Cannot open output file: " + filePath);
+
+    file << std::setprecision(16);
+    file << "% x y z V T disp\n";
+    for (std::size_t i = 0; i < result.coordinates.size(); ++i) {
+        file << result.coordinates[i].x << " "
+             << result.coordinates[i].y << " "
+             << result.coordinates[i].z << " "
+             << result.electricPotential[i] << " "
+             << result.temperature[i] << " "
+             << result.displacement[i] << "\n";
     }
-    if (result.electricPotential.size() != count
-        || result.temperature.size() != count
-        || result.displacement.size() != count) {
-        errorMessage = "ComsolTextExporter field size mismatch";
-        return false;
-    }
-
-    std::ofstream output(outputPath.c_str());
-    if (!output.is_open()) {
-        errorMessage = "Cannot open output file: " + outputPath;
-        return false;
-    }
-
-    output << "% Model: mpfem\n";
-    output << "% Dimension: 3\n";
-    output << "% Nodes: " << count << "\n";
-    output << "% Expressions: 3\n";
-    output << "% Description: Electric potential, Temperature, Displacement magnitude\n";
-    output << "x\ty\tz\tV(V)\tT(K)\tsolid.disp(m)\n";
-
-    output << std::setprecision(16);
-    for (std::size_t i = 0; i < count; ++i) {
-        output << result.coordinates[i].x << '\t'
-               << result.coordinates[i].y << '\t'
-               << result.coordinates[i].z << '\t'
-               << result.electricPotential[i] << '\t'
-               << result.temperature[i] << '\t'
-               << result.displacement[i] << '\n';
-    }
-
-    return true;
 }
 
 } // namespace mpfem

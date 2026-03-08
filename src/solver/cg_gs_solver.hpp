@@ -6,20 +6,15 @@
 namespace mpfem {
 
 /**
- * @brief CG solver with Gauss-Seidel preconditioner.
- * 
- * This is the original solver implementation wrapped in the strategy pattern.
- * Suitable for small to medium problems where the Gauss-Seidel preconditioner
- * provides reasonable convergence.
+ * @brief CG solver with Gauss-Seidel preconditioner (serial version).
  */
 class CGGSSolver : public LinearSolverStrategy {
 public:
     CGGSSolver();
 
-    bool solve(mfem::SparseMatrix& matrix,
-               mfem::Vector& solution,
-               mfem::Vector& rhs,
-               std::string& errorMessage) override;
+    void solve(FemMatrix& matrix,
+               FemVector& solution,
+               FemVector& rhs) override;
 
     void setMaxIterations(int maxIterations) override;
     void setRelativeTolerance(double tolerance) override;

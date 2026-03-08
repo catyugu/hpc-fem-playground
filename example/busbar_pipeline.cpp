@@ -1,134 +1,120 @@
-#include "case_xml_reader.hpp"
-#include "comsol_result_reader.hpp"
-#include "comsol_text_exporter.hpp"
-#include "logger.hpp"
-#include "material_xml_reader.hpp"
-#include "mfem_coupled_solver.hpp"
-#include "physics_problem_builder.hpp"
-#include "vtu_exporter.hpp"
+/**
+ * @file busbar_pipeline.cpp
+ * @brief Complete pipeline for the busbar electro-thermal-mechanical analysis.
+ */
 
-#include "mfem.hpp"
+#include "mpfem.hpp"
+#include "mpfem_types.hpp"
 
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <cstdlib>
-#include <string>
-#include <vector>
 
-int main(int argc, char **argv)
+using namespace mpfem;
+
+int main(int argc, char* argv[])
 {
-    mpfem::ScopedTimer totalTimer("Total pipeline");
+#ifdef MFEM_USE_MPI
+    // Initialize MPI and HYPRE
+    mfem::Mpi::Init(argc, argv);
+    mfem::Hypre::Init();
+#endif
 
-    const int EXPECTED_ARGUMENT_COUNT = 2;
-    if (argc < EXPECTED_ARGUMENT_COUNT) {
-        mpfem::Logger::log(mpfem::LogLevel::Error,
-                           "Usage: busbar_pipeline <path-to-case.xml>");
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <case.xml>" << std::endl;
         return 1;
     }
 
     const std::filesystem::path casePath(argv[1]);
-    const std::filesystem::path caseDirectory = casePath.parent_path();
+    const std::filesystem::path caseDir = casePath.parent_path();
 
-    mpfem::CaseDefinition caseDefinition;
-    std::string errorMessage;
-    {
-        mpfem::ScopedTimer timer("XML parsing");
-        if (!mpfem::CaseXmlReader::readFromFile(casePath.string(), caseDefinition, errorMessage)) {
-            mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
+    // ========== Step 1: Parse case XML ==========
+    ScopedTimer xmlTimer("XML parsing");
+    CaseDefinition caseDefinition;
+    CaseXmlReader::readFromFile(casePath.string(), caseDefinition);
+    xmlTimer.stop();
+    Logger::log(LogLevel::Info, "XML parsing completed in " + xmlTimer.getElapsedStr());
+
+    // Use paths from case XML
+    std::filesystem::path materialPath = caseDir / caseDefinition.materialsPath;
+    std::filesystem::path meshPath = caseDir / caseDefinition.meshPath;
+    std::filesystem::path referencePath = caseDir / caseDefinition.comsolResultPath;
+
+    // ========== Step 2: Load materials ==========
+    ScopedTimer materialTimer("Material loading");
+    PhysicsMaterialDatabase materialDatabase;
+    MaterialXmlReader::readFromFile(materialPath.string(), materialDatabase);
+    materialTimer.stop();
+    Logger::log(LogLevel::Info, "Material loading completed in " + materialTimer.getElapsedStr());
+
+    // ========== Step 3: Build problem model ==========
+    ScopedTimer buildTimer("Problem building");
+    PhysicsProblemModel problemModel;
+    PhysicsProblemBuilder::build(caseDefinition, materialDatabase, problemModel);
+    buildTimer.stop();
+    Logger::log(LogLevel::Info, "Problem building completed in " + buildTimer.getElapsedStr());
+
+    // ========== Step 4: Load reference result ==========
+    ScopedTimer refTimer("Reference result loading");
+    std::vector<ComsolResultRow> referenceRows;
+    ComsolResultReader::readFromFile(referencePath.string(), referenceRows);
+    refTimer.stop();
+    Logger::log(LogLevel::Info, "Reference result loading completed in " + refTimer.getElapsedStr());
+
+    // ========== Step 5: Load mesh ==========
+    ScopedTimer meshTimer("Mesh loading");
+    
+    // Convert mphtxt to MFEM mesh format if needed
+    std::filesystem::path mfemMeshPath = meshPath;
+    if (meshPath.extension() == ".mphtxt") {
+        mfemMeshPath = meshPath;
+        mfemMeshPath.replace_extension(".mesh");
+        const std::string convertCommand = std::string("python3 scripts/mphtxt_to_mfem_mesh.py ")
+                                           + meshPath.string()
+                                           + " "
+                                           + mfemMeshPath.string();
+        const int convertStatus = std::system(convertCommand.c_str());
+        if (convertStatus != 0) {
+            Logger::log(LogLevel::Error, "Failed to convert mphtxt mesh to MFEM format");
             return 1;
         }
     }
 
-    const std::filesystem::path materialPath = caseDirectory / caseDefinition.materialsPath;
-    const std::filesystem::path referencePath = caseDirectory / caseDefinition.comsolResultPath;
-    const std::filesystem::path meshPath = caseDirectory / caseDefinition.meshPath;
+    std::unique_ptr<mfem::Mesh> serialMesh;
+    serialMesh.reset(new mfem::Mesh(mfemMeshPath.string().c_str(), 1, 1, true));
+    
+    FemMesh mesh;
+#ifdef MFEM_USE_MPI
+    // Create parallel mesh
+    mesh = FemMesh(MPI_COMM_WORLD, *serialMesh);
+    serialMesh.reset();
+#else
+    // Use serial mesh directly
+    mesh = std::move(*serialMesh);
+#endif
+    meshTimer.stop();
+    Logger::log(LogLevel::Info, "Mesh loading completed in " + meshTimer.getElapsedStr());
 
-    mpfem::MaterialDatabase materialDatabase;
-    {
-        mpfem::ScopedTimer timer("Material loading");
-        if (!mpfem::MaterialXmlReader::readFromFile(materialPath.string(), materialDatabase, errorMessage)) {
-            mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
-            return 1;
-        }
-    }
+    // ========== Step 6: Run coupled solver ==========
+    MfemCoupledSolver solver;
+    CoupledFieldResult result;
+    solver.solve(mesh, problemModel, materialDatabase, result);
 
-    mpfem::PhysicsProblemModel problemModel;
-    mpfem::PhysicsMaterialDatabase physicsMaterials;
-    {
-        mpfem::ScopedTimer timer("Problem building");
-        if (!mpfem::PhysicsProblemBuilder::build(caseDefinition,
-                                                 materialDatabase,
-                                                 problemModel,
-                                                 physicsMaterials,
-                                                 errorMessage)) {
-            mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
-            return 1;
-        }
-    }
+    // ========== Step 7: Export results ==========
+    const std::filesystem::path resultsDir = std::filesystem::current_path() / "results" / caseDefinition.caseName;
+    std::filesystem::create_directories(resultsDir);
+    
+    ScopedTimer exportTimer("Result export");
+    const std::filesystem::path comsolOutput = resultsDir / "mpfem_result.txt";
+    ComsolTextExporter::write(comsolOutput.string(), result);
+    
+    const std::filesystem::path vtuOutput = resultsDir / "mpfem_result.vtu";
+    VtuExporter::write(vtuOutput.string(), result);
+    
+    exportTimer.stop();
+    Logger::log(LogLevel::Info, "Result export completed in " + exportTimer.getElapsedStr());
+    Logger::log(LogLevel::Info, "Output: " + comsolOutput.string());
 
-    std::vector<mpfem::ComsolResultRow> referenceRows;
-    {
-        mpfem::ScopedTimer timer("Reference result loading");
-        if (!mpfem::ComsolResultReader::readFromFile(referencePath.string(), referenceRows, errorMessage)) {
-            mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
-            return 1;
-        }
-    }
-
-    mfem::Mesh mesh;
-    {
-        mpfem::ScopedTimer timer("Mesh loading");
-        std::filesystem::path mfemMeshPath = meshPath;
-        if (meshPath.extension() == ".mphtxt") {
-            mfemMeshPath = meshPath;
-            mfemMeshPath.replace_extension(".mesh");
-            const std::string convertCommand = std::string("python3 scripts/mphtxt_to_mfem_mesh.py ")
-                                               + meshPath.string()
-                                               + " "
-                                               + mfemMeshPath.string();
-            const int convertStatus = std::system(convertCommand.c_str());
-            if (convertStatus != 0) {
-                mpfem::Logger::log(mpfem::LogLevel::Error,
-                                   "Failed to convert mphtxt mesh to gmsh format");
-                return 1;
-            }
-        }
-
-        mesh = mfem::Mesh(mfemMeshPath.string().c_str(), 1, 1, true);
-    }
-
-    mpfem::MfemCoupledSolver solver;
-    mpfem::CoupledFieldResult result;
-    {
-        mpfem::ScopedTimer timer("Coupled solve");
-        if (!solver.solve(mesh,
-                          problemModel,
-                          physicsMaterials,
-                          result,
-                          errorMessage)) {
-            mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
-            return 1;
-        }
-    }
-
-    const std::filesystem::path outputDirectory = std::filesystem::path("results") / caseDefinition.caseName;
-    std::filesystem::create_directories(outputDirectory);
-
-    const std::filesystem::path comsolOutput = outputDirectory / "mpfem_result.txt";
-    {
-        mpfem::ScopedTimer timer("Result export");
-        if (!mpfem::ComsolTextExporter::write(comsolOutput.string(), result, errorMessage)) {
-            mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
-            return 1;
-        }
-    }
-
-    const std::filesystem::path vtuOutput = outputDirectory / "mpfem_result.vtu";
-    if (!mpfem::VtuExporter::write(vtuOutput.string(), result, errorMessage)) {
-        mpfem::Logger::log(mpfem::LogLevel::Error, errorMessage);
-        return 1;
-    }
-
-    mpfem::Logger::log(mpfem::LogLevel::Info,
-                       "Output: " + comsolOutput.string());
     return 0;
 }

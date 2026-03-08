@@ -1,14 +1,10 @@
 #include "coupling_manager.hpp"
 #include "electrostatics_solver.hpp"
 #include "heat_transfer_solver.hpp"
-#include "logger.hpp"
 #include "solid_mechanics_solver.hpp"
+#include "logger.hpp"
 
 #include <cmath>
-#include <algorithm>
-#include <functional>
-#include <sstream>
-#include <iomanip>
 
 namespace mpfem {
 
@@ -19,98 +15,68 @@ public:
     int numIterations_ = 0;
     bool converged_ = false;
 
-    // Previous iteration solutions for convergence check
-    std::unique_ptr<mfem::GridFunction> prevTemperature_;
-    std::unique_ptr<mfem::GridFunction> prevDisplacement_;
-
-    double computeFieldDelta(const mfem::GridFunction& previous,
-                            const mfem::GridFunction& current);
-    bool runNewtonRaphson(std::string& errorMessage);
-    bool runPicard(std::string& errorMessage);
+    void runNewtonRaphson();
+    void runPicard();
+    void solveField(PhysicsFieldSolver* solver, const std::string& name);
     void savePreviousSolutions();
     bool checkConvergence();
 
-    // Helper: execute assemble + solve for a field
-    bool solveField(PhysicsFieldSolver* solver,
-                    const std::string& label,
-                    std::string& errorMessage);
+    std::vector<FemVector> previousSolutions_;
 };
 
-bool CouplingManager::Impl::solveField(PhysicsFieldSolver* solver,
-                                        const std::string& label,
-                                        std::string& errorMessage)
+void CouplingManager::Impl::solveField(PhysicsFieldSolver* solver, const std::string& name)
 {
-    ScopedTimer timer(label);
+    ScopedTimer timer(name);
     solver->applyBoundaryConditions();
-    return solver->assemble(errorMessage) && solver->solve(errorMessage);
-}
-
-double CouplingManager::Impl::computeFieldDelta(const mfem::GridFunction& previous,
-                                                 const mfem::GridFunction& current)
-{
-    if (previous.Size() != current.Size()) {
-        return 1.0;
-    }
-
-    double maxDelta = 0.0;
-    for (int i = 0; i < previous.Size(); ++i) {
-        const double delta = std::abs(previous(i) - current(i));
-        if (delta > maxDelta) {
-            maxDelta = delta;
-        }
-    }
-
-    return maxDelta;
+    solver->assemble();
+    solver->solve();
 }
 
 void CouplingManager::Impl::savePreviousSolutions()
 {
-    // Save temperature
-    auto tempIter = solvers_.find(FieldKind::Temperature);
-    if (tempIter != solvers_.end()) {
-        const auto& temp = tempIter->second->getField();
-        prevTemperature_ = std::make_unique<mfem::GridFunction>(temp);
-    }
-
-    // Save displacement
-    auto dispIter = solvers_.find(FieldKind::Displacement);
-    if (dispIter != solvers_.end()) {
-        const auto& disp = dispIter->second->getField();
-        prevDisplacement_ = std::make_unique<mfem::GridFunction>(disp);
+    previousSolutions_.clear();
+    for (const auto& [kind, solver] : solvers_) {
+        const FemGridFunction& field = solver->getField();
+        previousSolutions_.push_back(FemVector(field));
     }
 }
 
 bool CouplingManager::Impl::checkConvergence()
 {
-    // Check temperature convergence
-    auto tempIter = solvers_.find(FieldKind::Temperature);
-    if (tempIter != solvers_.end() && prevTemperature_) {
-        const auto& currentTemp = tempIter->second->getField();
-        const double tempDelta = computeFieldDelta(*prevTemperature_, currentTemp);
-        if (tempDelta >= config_.tolerance) {
-            return false;
-        }
+    if (previousSolutions_.empty()) {
+        return false;
     }
 
-    // Check displacement convergence
-    auto dispIter = solvers_.find(FieldKind::Displacement);
-    if (dispIter != solvers_.end() && prevDisplacement_) {
-        const auto& currentDisp = dispIter->second->getField();
-        const double dispDelta = computeFieldDelta(*prevDisplacement_, currentDisp);
-        if (dispDelta >= config_.tolerance) {
-            return false;
+    int index = 0;
+    double maxRelDiff = 0.0;
+
+    for (const auto& [kind, solver] : solvers_) {
+        const FemGridFunction& current = solver->getField();
+        const FemVector& previous = previousSolutions_[index];
+        
+        double diff = 0.0;
+        double norm = 0.0;
+        const int size = current.Size();
+        
+        for (int i = 0; i < size; ++i) {
+            const double d = current(i) - previous(i);
+            diff += d * d;
+            norm += current(i) * current(i);
         }
+
+        const double relDiff = (norm > 0.0) ? std::sqrt(diff / norm) : 0.0;
+        maxRelDiff = std::max(maxRelDiff, relDiff);
+        ++index;
     }
 
-    return true;
+    Logger::log(LogLevel::Debug, "Convergence check: max relative diff = " 
+               + std::to_string(maxRelDiff));
+
+    return maxRelDiff < config_.tolerance;
 }
 
-bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
+void CouplingManager::Impl::runNewtonRaphson()
 {
-    // For segregated coupling with Newton-Raphson, we use a simplified approach:
-    // Each field is solved sequentially with updated coupling terms.
-    // This is equivalent to a block Gauss-Seidel iteration with under-relaxation.
-
     for (int iter = 0; iter < config_.maxIterations; ++iter) {
         numIterations_ = iter + 1;
         savePreviousSolutions();
@@ -128,9 +94,7 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
                 electroSolver->setTemperatureField(&tempIter->second->getField());
             }
 
-            if (!solveField(electroIter->second, "Electrostatics solve", errorMessage)) {
-                return false;
-            }
+            solveField(electroIter->second, "Electrostatics solve");
         }
 
         // Step 2: Solve heat transfer (with Joule heating source)
@@ -146,9 +110,7 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
                         ->getConductivityCoefficient());
             }
 
-            if (!solveField(heatIter->second, "Heat transfer solve", errorMessage)) {
-                return false;
-            }
+            solveField(heatIter->second, "Heat transfer solve");
         }
 
         // Step 3: Solve solid mechanics (with thermal expansion load)
@@ -161,31 +123,25 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
                 mechSolver->setTemperatureField(&heatIter->second->getField());
             }
 
-            if (!solveField(mechIter->second, "Solid mechanics solve", errorMessage)) {
-                return false;
-            }
+            solveField(mechIter->second, "Solid mechanics solve");
         }
 
         // Check convergence
         if (checkConvergence()) {
             converged_ = true;
             Logger::log(LogLevel::Info, "Coupling converged after " + std::to_string(numIterations_) + " iterations");
-            return true;
+            return;
         }
     }
 
-    errorMessage = "Newton-Raphson coupling did not converge after "
-                 + std::to_string(config_.maxIterations) + " iterations";
+    Logger::log(LogLevel::Error, "Coupling did not converge after " 
+               + std::to_string(config_.maxIterations) + " iterations");
     converged_ = false;
-    return false;
 }
 
-bool CouplingManager::Impl::runPicard(std::string& errorMessage)
+void CouplingManager::Impl::runPicard()
 {
-    // Picard iteration is similar to Newton-Raphson for segregated coupling
-    // The difference is mainly in how we handle the linearization
-    // For this implementation, we use the same approach as Newton-Raphson
-    return runNewtonRaphson(errorMessage);
+    runNewtonRaphson();
 }
 
 CouplingManager::CouplingManager()
@@ -207,29 +163,25 @@ void CouplingManager::setCouplingConfig(const CouplingConfig& config)
 
 void CouplingManager::setupCoupling()
 {
-    // Initial setup - nothing specific needed here for segregated coupling
+    // Setup coupling connections between fields
 }
 
-bool CouplingManager::run(std::string& errorMessage)
+void CouplingManager::run()
 {
-    errorMessage.clear();
     impl_->converged_ = false;
     impl_->numIterations_ = 0;
 
-    // Initial boundary condition application
-    for (auto& pair : impl_->solvers_) {
-        pair.second->applyBoundaryConditions();
-    }
+    ScopedTimer timer("Coupled solve");
 
-    // Choose iteration method
-    if (impl_->config_.method == "newton_raphson") {
-        return impl_->runNewtonRaphson(errorMessage);
+    CouplingMethod method = parseCouplingMethod(impl_->config_.method);
+    if (method == CouplingMethod::Picard) {
+        impl_->runPicard();
     } else {
-        return impl_->runPicard(errorMessage);
+        impl_->runNewtonRaphson();
     }
 }
 
-const mfem::GridFunction* CouplingManager::getField(FieldKind kind) const
+const FemGridFunction* CouplingManager::getField(FieldKind kind) const
 {
     auto iter = impl_->solvers_.find(kind);
     if (iter != impl_->solvers_.end()) {

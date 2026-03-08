@@ -3,12 +3,10 @@
 
 #include "physics_field_solver.hpp"
 #include "physics_problem_model.hpp"
-
-#include "mfem.hpp"
+#include "mpfem_types.hpp"
 
 #include <map>
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace mpfem {
@@ -41,21 +39,18 @@ public:
 
     /**
      * @brief Setup coupling data transfer between fields.
-     * This should be called after all fields are registered.
      */
     void setupCoupling();
 
     /**
      * @brief Run the coupled iteration loop.
-     * @param errorMessage Error message on failure.
-     * @return True if converged successfully.
      */
-    bool run(std::string& errorMessage);
+    void run();
 
     /**
      * @brief Get a field solution by kind.
      */
-    const mfem::GridFunction* getField(FieldKind kind) const;
+    const FemGridFunction* getField(FieldKind kind) const;
 
     /**
      * @brief Get the number of iterations from the last run.

@@ -5,29 +5,19 @@
 #include "material_model.hpp"
 #include "physics_problem_model.hpp"
 
-#include <string>
-
 namespace mpfem {
 
 /**
- * @brief Builds configuration-independent physics problem models.
+ * @brief Builds PhysicsProblemModel from case and material definitions.
  */
 class PhysicsProblemBuilder {
 public:
     /**
-     * @brief Converts parsed case and material data to generic physics model.
-     * @param caseDefinition Parsed case definition.
-     * @param materialDatabase Parsed material database.
-     * @param problemModel Output generic problem model.
-     * @param physicsMaterials Output reduced material property model.
-     * @param errorMessage Error details on failure.
-     * @return True when conversion succeeds.
+     * @brief Builds the physics problem model.
      */
-    static bool build(const CaseDefinition &caseDefinition,
-                      const MaterialDatabase &materialDatabase,
-                      PhysicsProblemModel &problemModel,
-                      PhysicsMaterialDatabase &physicsMaterials,
-                      std::string &errorMessage);
+    static void build(const CaseDefinition &caseDefinition,
+                      const PhysicsMaterialDatabase &materials,
+                      PhysicsProblemModel &problemModel);
 };
 
 } // namespace mpfem

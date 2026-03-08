@@ -4,6 +4,8 @@
 #include <chrono>
 #include <mutex>
 #include <string>
+#include <sstream>
+#include <cstdlib>
 
 namespace mpfem {
 
@@ -24,23 +26,13 @@ class Logger {
 public:
     /**
      * @brief Sets minimum severity threshold for output.
-     * @param level New minimum level.
      */
     static void setLevel(LogLevel level);
 
     /**
      * @brief Logs a message when level is above configured threshold.
-     * @param level Severity of current message.
-     * @param message Text payload.
      */
     static void log(LogLevel level, const std::string &message);
-
-    /**
-     * @brief Logs a message with elapsed time since program start.
-     * @param level Severity of current message.
-     * @param message Text payload.
-     */
-    static void logWithTimestamp(LogLevel level, const std::string &message);
 
     /**
      * @brief Returns elapsed milliseconds since program start.
@@ -72,11 +64,30 @@ public:
     ScopedTimer(ScopedTimer &&) = delete;
     ScopedTimer &operator=(ScopedTimer &&) = delete;
 
+    void stop();
+    double getElapsedSeconds() const;
+    std::string getElapsedStr() const;
+
 private:
     std::string label_;
     LogLevel level_;
     std::chrono::steady_clock::time_point start_;
+    bool stopped_ = false;
 };
+
+/**
+ * @brief Assertion macro that logs error and exits on failure.
+ * 
+ * Usage: Check(condition, "Error message");
+ * If condition is false, logs error and calls std::exit(1).
+ */
+#define Check(cond, msg) \
+    do { \
+        if (!(cond)) { \
+            ::mpfem::Logger::log(::mpfem::LogLevel::Error, msg); \
+            std::exit(1); \
+        } \
+    } while (0)
 
 } // namespace mpfem
 

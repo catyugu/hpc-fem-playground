@@ -3,8 +3,7 @@
 
 #include "physics_problem_model.hpp"
 #include "simulation_data.hpp"
-
-#include "mfem.hpp"
+#include "mpfem_types.hpp"
 
 #include <map>
 #include <set>
@@ -23,14 +22,11 @@ public:
      * @param problemModel Generic problem model (includes coupling config).
      * @param materials Reduced material property model.
      * @param result Output sampled field results.
-     * @param errorMessage Error details on failure.
-     * @return True when solve succeeds.
      */
-    bool solve(mfem::Mesh &mesh,
+    void solve(FemMesh &mesh,
                const PhysicsProblemModel &problemModel,
                const PhysicsMaterialDatabase &materials,
-               CoupledFieldResult &result,
-               std::string &errorMessage) const;
+               CoupledFieldResult &result) const;
 };
 
 } // namespace mpfem

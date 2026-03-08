@@ -10,10 +10,9 @@ namespace mpfem {
 /**
  * @brief Solver for solid mechanics (displacement) field.
  * 
- * Solves: div(sigma) = 0  (static equilibrium)
- * with support for:
- * - Fixed constraint boundary conditions
- * - Thermal expansion load: sigma = (lambda + 2*mu) * alpha * deltaT * I
+ * Solves linear elasticity with thermal expansion:
+ * -div(sigma) = 0
+ * where sigma = lambda * div(u) * I + 2 * mu * epsilon(u) - (3*lambda + 2*mu) * alpha * deltaT * I
  */
 class SolidMechanicsSolver : public PhysicsFieldSolver {
 public:
@@ -23,39 +22,37 @@ public:
     void setOrder(int order) override;
     void setSolver(std::unique_ptr<LinearSolverStrategy> solver) override;
 
-    bool initialize(mfem::Mesh& mesh,
+    void initialize(FemMesh& mesh,
                    const PhysicsProblemModel& problemModel,
-                   const PhysicsMaterialDatabase& materials,
-                   std::string& errorMessage) override;
+                   const PhysicsMaterialDatabase& materials) override;
 
     void applyBoundaryConditions() override;
-    bool assemble(std::string& errorMessage) override;
-    bool solve(std::string& errorMessage) override;
+    void assemble() override;
+    void solve() override;
 
-    mfem::GridFunction& getField() override;
-    const mfem::GridFunction& getField() const override;
+    FemGridFunction& getField() override;
+    const FemGridFunction& getField() const override;
     FieldKind getFieldKind() const override;
-    mfem::FiniteElementSpace& getSpace() override;
-    const mfem::FiniteElementSpace& getSpace() const override;
+    FemFEspace& getSpace() override;
+    const FemFEspace& getSpace() const override;
 
     /**
-     * @brief Set the temperature field for thermal expansion load.
-     * @param temperature Temperature field grid function.
+     * @brief Set the temperature field for thermal expansion.
      */
-    void setTemperatureField(const mfem::GridFunction* temperature);
+    void setTemperatureField(const FemGridFunction* temperature);
 
     /**
-     * @brief Get the Lambda coefficient (Lame's first parameter).
+     * @brief Get Lame parameter lambda coefficient.
      */
     mfem::Coefficient* getLambdaCoefficient();
 
     /**
-     * @brief Get the Mu coefficient (Lame's second parameter / shear modulus).
+     * @brief Get Lame parameter mu coefficient.
      */
     mfem::Coefficient* getMuCoefficient();
 
     /**
-     * @brief Get the thermal expansion coefficient.
+     * @brief Get thermal expansion coefficient.
      */
     mfem::Coefficient* getThermalExpansionCoefficient();
 

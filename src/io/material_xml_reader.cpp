@@ -1,6 +1,6 @@
 #include "material_xml_reader.hpp"
-
 #include "value_parser.hpp"
+#include "logger.hpp"
 
 #include "general/tinyxml2.h"
 
@@ -9,102 +9,91 @@
 namespace mpfem {
 
 namespace {
+
 void parsePropertySets(const tinyxml2::XMLElement *materialElement,
-                       std::map<std::string, double> &target,
-                       std::string &errorMessage)
+                       std::map<std::string, double> &target)
 {
     const tinyxml2::XMLElement *propertyGroupElement = materialElement->FirstChildElement("propertyGroup");
-    while (propertyGroupElement != NULL) {
+    while (propertyGroupElement != nullptr) {
         const tinyxml2::XMLElement *setElement = propertyGroupElement->FirstChildElement("set");
-        while (setElement != NULL) {
+        while (setElement != nullptr) {
             const char *propertyName = setElement->Attribute("name");
             const char *valueText = setElement->Attribute("value");
-            if (propertyName != NULL && valueText != NULL) {
+            if (propertyName != nullptr && valueText != nullptr) {
                 double parsedValue = 0.0;
-                std::string parseError;
-                if (ValueParser::parseFirstNumber(valueText, parsedValue, parseError)) {
+                if (ValueParser::parseFirstNumber(valueText, parsedValue)) {
                     target[propertyName] = parsedValue;
                 }
             }
             setElement = setElement->NextSiblingElement("set");
         }
-
         propertyGroupElement = propertyGroupElement->NextSiblingElement("propertyGroup");
     }
 
     const tinyxml2::XMLElement *setElement = materialElement->FirstChildElement("set");
-    while (setElement != NULL) {
+    while (setElement != nullptr) {
         const char *propertyName = setElement->Attribute("name");
         const char *valueText = setElement->Attribute("value");
-        if (propertyName != NULL && valueText != NULL) {
+        if (propertyName != nullptr && valueText != nullptr) {
             double parsedValue = 0.0;
-            std::string parseError;
-            if (ValueParser::parseFirstNumber(valueText, parsedValue, parseError)) {
+            if (ValueParser::parseFirstNumber(valueText, parsedValue)) {
                 target[propertyName] = parsedValue;
             }
         }
         setElement = setElement->NextSiblingElement("set");
     }
-
-    errorMessage.clear();
 }
 
 } // namespace
 
-bool MaterialXmlReader::readFromFile(const std::string &filePath,
-                                     MaterialDatabase &database,
-                                     std::string &errorMessage)
+void MaterialXmlReader::readFromFile(const std::string &filePath, PhysicsMaterialDatabase &database)
 {
-    database.materials.clear();
-    errorMessage.clear();
+    database.byTag.clear();
 
     tinyxml2::XMLDocument document;
     const tinyxml2::XMLError loadError = document.LoadFile(filePath.c_str());
-    if (loadError != tinyxml2::XML_SUCCESS) {
-        errorMessage = "Failed to parse XML file: " + filePath;
-        return false;
-    }
+    Check(loadError == tinyxml2::XML_SUCCESS, "Failed to parse XML file: " + filePath);
 
     const tinyxml2::XMLElement *archiveElement = document.FirstChildElement("archive");
-    if (archiveElement == NULL) {
-        errorMessage = "Missing <archive> root node in material XML";
-        return false;
-    }
+    Check(archiveElement != nullptr, "Missing <archive> root node in material XML");
+    
     const tinyxml2::XMLElement *modelElement = archiveElement->FirstChildElement("model");
-    if (modelElement == NULL) {
-        errorMessage = "Missing <model> node in material XML";
-        return false;
-    }
+    Check(modelElement != nullptr, "Missing <model> node in material XML");
 
     const tinyxml2::XMLElement *materialElement = modelElement->FirstChildElement("material");
-    while (materialElement != NULL) {
-        MaterialDefinition material;
-        if (materialElement->Attribute("tag") != NULL) {
+    while (materialElement != nullptr) {
+        MaterialPropertyModel material;
+        if (materialElement->Attribute("tag") != nullptr) {
             material.tag = materialElement->Attribute("tag");
         }
 
         const tinyxml2::XMLElement *labelElement = materialElement->FirstChildElement("label");
-        if (labelElement != NULL && labelElement->Attribute("label") != NULL) {
+        if (labelElement != nullptr && labelElement->Attribute("label") != nullptr) {
             material.label = labelElement->Attribute("label");
         }
 
-        std::string parseError;
-        parsePropertySets(materialElement, material.siProperties, parseError);
-        if (!parseError.empty()) {
-            errorMessage = "Failed to parse material properties for tag " + material.tag + ": " + parseError;
-            return false;
-        }
+        parsePropertySets(materialElement, material.properties);
 
-        database.materials.push_back(material);
+        // Extract specific properties (names match material.xml)
+        auto getProperty = [&](const std::string& name) -> double {
+            auto it = material.properties.find(name);
+            return it != material.properties.end() ? it->second : 0.0;
+        };
+
+        material.rho0 = getProperty("rho0");
+        material.alpha = getProperty("alpha");
+        material.tref = getProperty("Tref");
+        material.electricConductivity = getProperty("electricconductivity");
+        material.thermalConductivity = getProperty("thermalconductivity");
+        material.youngModulus = getProperty("E");
+        material.poissonRatio = getProperty("nu");
+        material.thermalExpansion = getProperty("thermalexpansioncoefficient");
+
+        database.byTag[material.tag] = material;
         materialElement = materialElement->NextSiblingElement("material");
     }
 
-    if (database.materials.empty()) {
-        errorMessage = "No material blocks found in file: " + filePath;
-        return false;
-    }
-
-    return true;
+    Check(!database.byTag.empty(), "No material blocks found in file: " + filePath);
 }
 
 } // namespace mpfem

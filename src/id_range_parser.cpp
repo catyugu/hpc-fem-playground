@@ -1,4 +1,5 @@
 #include "id_range_parser.hpp"
+#include "logger.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -50,30 +51,22 @@ bool parsePositiveInt(const std::string &text, int &value)
 
 } // namespace
 
-bool IdRangeParser::parseIds(const std::string &text,
-                             std::set<int> &ids,
-                             std::string &errorMessage)
+void IdRangeParser::parseIds(const std::string &text, std::set<int> &ids)
 {
     ids.clear();
-    errorMessage.clear();
 
     std::stringstream tokenStream(text);
     std::string token;
 
     while (std::getline(tokenStream, token, TOKEN_DELIMITER)) {
         const std::string trimmedToken = trim(token);
-        if (trimmedToken.empty()) {
-            errorMessage = "Empty token found in range expression";
-            return false;
-        }
+        Check(!trimmedToken.empty(), "Empty token found in range expression");
 
         const std::size_t rangePos = trimmedToken.find(RANGE_DELIMITER);
         if (rangePos == std::string::npos) {
             int value = 0;
-            if (!parsePositiveInt(trimmedToken, value)) {
-                errorMessage = "Invalid identifier token: " + trimmedToken;
-                return false;
-            }
+            Check(parsePositiveInt(trimmedToken, value), 
+                  ("Invalid identifier token: " + trimmedToken).c_str());
             ids.insert(value);
             continue;
         }
@@ -82,26 +75,17 @@ bool IdRangeParser::parseIds(const std::string &text,
         const std::string endToken = trim(trimmedToken.substr(rangePos + 1));
         int beginValue = 0;
         int endValue = 0;
-        if (!parsePositiveInt(beginToken, beginValue) || !parsePositiveInt(endToken, endValue)) {
-            errorMessage = "Invalid range token: " + trimmedToken;
-            return false;
-        }
-        if (beginValue > endValue) {
-            errorMessage = "Descending range is not allowed: " + trimmedToken;
-            return false;
-        }
+        Check(parsePositiveInt(beginToken, beginValue) && parsePositiveInt(endToken, endValue),
+              ("Invalid range token: " + trimmedToken).c_str());
+        Check(beginValue <= endValue, 
+              ("Descending range is not allowed: " + trimmedToken).c_str());
 
         for (int value = beginValue; value <= endValue; ++value) {
             ids.insert(value);
         }
     }
 
-    if (ids.empty()) {
-        errorMessage = "No ids found in expression";
-        return false;
-    }
-
-    return true;
+    Check(!ids.empty(), "No ids found in expression");
 }
 
 } // namespace mpfem

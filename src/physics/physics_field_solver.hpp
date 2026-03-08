@@ -2,12 +2,10 @@
 #define MPFEM_PHYSICS_FIELD_SOLVER_HPP
 
 #include "linear_solver_strategy.hpp"
+#include "mpfem_types.hpp"
 #include "physics_problem_model.hpp"
 
-#include "mfem.hpp"
-
 #include <memory>
-#include <string>
 
 namespace mpfem {
 
@@ -16,6 +14,8 @@ namespace mpfem {
  * 
  * Each physics field (electrostatics, heat transfer, solid mechanics) 
  * implements this interface, allowing unified coupling management.
+ * 
+ * Error handling: errors are logged and the program exits immediately.
  */
 class PhysicsFieldSolver {
 public:
@@ -33,16 +33,10 @@ public:
 
     /**
      * @brief Initialize the solver with mesh and materials.
-     * @param mesh The finite element mesh.
-     * @param problemModel The physics problem model containing boundary conditions.
-     * @param materials The material database.
-     * @param errorMessage Error message on failure.
-     * @return True if initialization succeeded.
      */
-    virtual bool initialize(mfem::Mesh& mesh,
+    virtual void initialize(FemMesh& mesh,
                            const PhysicsProblemModel& problemModel,
-                           const PhysicsMaterialDatabase& materials,
-                           std::string& errorMessage) = 0;
+                           const PhysicsMaterialDatabase& materials) = 0;
 
     /**
      * @brief Apply boundary conditions to the system.
@@ -51,23 +45,19 @@ public:
 
     /**
      * @brief Assemble the system matrix and right-hand side.
-     * @param errorMessage Error message on failure.
-     * @return True if assembly succeeded.
      */
-    virtual bool assemble(std::string& errorMessage) = 0;
+    virtual void assemble() = 0;
 
     /**
      * @brief Solve the linear system.
-     * @param errorMessage Error message on failure.
-     * @return True if solve succeeded.
      */
-    virtual bool solve(std::string& errorMessage) = 0;
+    virtual void solve() = 0;
 
     /**
      * @brief Get the field solution as a GridFunction.
      */
-    virtual mfem::GridFunction& getField() = 0;
-    virtual const mfem::GridFunction& getField() const = 0;
+    virtual FemGridFunction& getField() = 0;
+    virtual const FemGridFunction& getField() const = 0;
 
     /**
      * @brief Get the field kind this solver handles.
@@ -77,8 +67,8 @@ public:
     /**
      * @brief Get the finite element space for this field.
      */
-    virtual mfem::FiniteElementSpace& getSpace() = 0;
-    virtual const mfem::FiniteElementSpace& getSpace() const = 0;
+    virtual FemFEspace& getSpace() = 0;
+    virtual const FemFEspace& getSpace() const = 0;
 };
 
 } // namespace mpfem

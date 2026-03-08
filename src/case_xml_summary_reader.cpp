@@ -1,6 +1,6 @@
 #include "case_xml_summary_reader.hpp"
-
 #include "id_range_parser.hpp"
+#include "logger.hpp"
 
 #include <fstream>
 #include <regex>
@@ -14,31 +14,20 @@ const char *const VAR_PATTERN = "<var\\s+";
 const char *const ASSIGN_DOMAINS_PATTERN = "<assign[^>]*domains=\\\"([^\\\"]+)\\\"";
 const char *const BOUNDARY_IDS_PATTERN = "<boundary[^>]*ids=\\\"([^\\\"]+)\\\"";
 
-bool readTextFile(const std::string &filePath,
-                  std::string &content,
-                  std::string &errorMessage)
+void readTextFile(const std::string &filePath, std::string &content)
 {
     std::ifstream input(filePath.c_str());
-    if (!input.is_open()) {
-        errorMessage = "Cannot open file: " + filePath;
-        return false;
-    }
+    Check(input.is_open(), "Cannot open file: " + filePath);
 
     std::ostringstream buffer;
     buffer << input.rdbuf();
     content = buffer.str();
-    if (content.empty()) {
-        errorMessage = "Empty file: " + filePath;
-        return false;
-    }
-
-    return true;
+    Check(!content.empty(), "Empty file: " + filePath);
 }
 
-bool collectIdsByPattern(const std::string &content,
+void collectIdsByPattern(const std::string &content,
                          const std::string &pattern,
-                         std::set<int> &target,
-                         std::string &errorMessage)
+                         std::set<int> &target)
 {
     const std::regex regexPattern(pattern);
     const std::sregex_iterator begin(content.begin(), content.end(), regexPattern);
@@ -47,33 +36,21 @@ bool collectIdsByPattern(const std::string &content,
     for (std::sregex_iterator iter = begin; iter != end; ++iter) {
         const std::string rangeText = (*iter)[1].str();
         std::set<int> parsedIds;
-        std::string parseError;
-        if (!IdRangeParser::parseIds(rangeText, parsedIds, parseError)) {
-            errorMessage = "Failed to parse id list '" + rangeText + "': " + parseError;
-            return false;
-        }
-
+        IdRangeParser::parseIds(rangeText, parsedIds);
         target.insert(parsedIds.begin(), parsedIds.end());
     }
-
-    return true;
 }
 
 } // namespace
 
-bool CaseXmlSummaryReader::readFromFile(const std::string &filePath,
-                                        CaseXmlSummary &summary,
-                                        std::string &errorMessage)
+void CaseXmlSummaryReader::readFromFile(const std::string &filePath, CaseXmlSummary &summary)
 {
     summary.variableCount = 0;
     summary.domainIds.clear();
     summary.boundaryIds.clear();
-    errorMessage.clear();
 
     std::string content;
-    if (!readTextFile(filePath, content, errorMessage)) {
-        return false;
-    }
+    readTextFile(filePath, content);
 
     const std::regex variablePattern(VAR_PATTERN);
     const std::sregex_iterator begin(content.begin(), content.end(), variablePattern);
@@ -85,20 +62,8 @@ bool CaseXmlSummaryReader::readFromFile(const std::string &filePath,
     }
     summary.variableCount = count;
 
-    if (!collectIdsByPattern(content,
-                             ASSIGN_DOMAINS_PATTERN,
-                             summary.domainIds,
-                             errorMessage)) {
-        return false;
-    }
-    if (!collectIdsByPattern(content,
-                             BOUNDARY_IDS_PATTERN,
-                             summary.boundaryIds,
-                             errorMessage)) {
-        return false;
-    }
-
-    return true;
+    collectIdsByPattern(content, ASSIGN_DOMAINS_PATTERN, summary.domainIds);
+    collectIdsByPattern(content, BOUNDARY_IDS_PATTERN, summary.boundaryIds);
 }
 
 } // namespace mpfem

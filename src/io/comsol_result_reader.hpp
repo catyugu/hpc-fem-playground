@@ -3,36 +3,20 @@
 
 #include "simulation_data.hpp"
 
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace mpfem {
 
 /**
- * @brief One row from COMSOL-style result text file.
- */
-struct ComsolResultRow {
-    Coordinate3D coordinate;
-    double electricPotential = 0.0;
-    double temperature = 0.0;
-    double displacement = 0.0;
-};
-
-/**
- * @brief Reads COMSOL text result format used by busbar reference.
+ * @brief Reads COMSOL reference results from text file.
  */
 class ComsolResultReader {
 public:
     /**
-     * @brief Parses rows from result text file.
-     * @param filePath Input result path.
-     * @param rows Parsed rows.
-     * @param errorMessage Error details on failure.
-     * @return True when parsing succeeds.
+     * @brief Parses COMSOL result file.
      */
-    static bool readFromFile(const std::string &filePath,
-                             std::vector<ComsolResultRow> &rows,
-                             std::string &errorMessage);
+    static void readFromFile(const std::string &filePath, std::vector<ComsolResultRow> &rows);
 };
 
 } // namespace mpfem

@@ -5,6 +5,8 @@
 #include "heat_transfer_solver.hpp"
 #include "linear_solver_strategy.hpp"
 #include "solid_mechanics_solver.hpp"
+#include "logger.hpp"
+#include "mpfem_types.hpp"
 
 #include <cmath>
 
@@ -12,15 +14,12 @@ namespace mpfem {
 
 namespace {
 
-bool recoverVertexSample(const mfem::Mesh& mesh,
-                         const mfem::GridFunction& potential,
-                         const mfem::GridFunction& temperature,
-                         const mfem::GridFunction& displacement,
-                         CoupledFieldResult& result,
-                         std::string& errorMessage)
+void recoverVertexSample(const FemMesh& mesh,
+                         const FemGridFunction& potential,
+                         const FemGridFunction& temperature,
+                         const FemGridFunction& displacement,
+                         CoupledFieldResult& result)
 {
-    errorMessage.clear();
-
     const int vertexCount = mesh.GetNV();
     result.coordinates.resize(vertexCount);
     result.electricPotential.resize(vertexCount, 0.0);
@@ -39,14 +38,11 @@ bool recoverVertexSample(const mfem::Mesh& mesh,
     displacement.GetNodalValues(nodalUy, 2);
     displacement.GetNodalValues(nodalUz, 3);
 
-    if (nodalPotential.Size() < vertexCount
-        || nodalTemperature.Size() < vertexCount
-        || nodalUx.Size() < vertexCount
-        || nodalUy.Size() < vertexCount
-        || nodalUz.Size() < vertexCount) {
-        errorMessage = "Nodal sample size mismatch while exporting coupled result";
-        return false;
-    }
+    Check(nodalPotential.Size() >= vertexCount, "Nodal potential size mismatch");
+    Check(nodalTemperature.Size() >= vertexCount, "Nodal temperature size mismatch");
+    Check(nodalUx.Size() >= vertexCount, "Nodal Ux size mismatch");
+    Check(nodalUy.Size() >= vertexCount, "Nodal Uy size mismatch");
+    Check(nodalUz.Size() >= vertexCount, "Nodal Uz size mismatch");
 
     for (int i = 0; i < vertexCount; ++i) {
         const double* vertex = mesh.GetVertex(i);
@@ -60,30 +56,15 @@ bool recoverVertexSample(const mfem::Mesh& mesh,
         const double uz = nodalUz(i);
         result.displacement[i] = std::sqrt(ux * ux + uy * uy + uz * uz);
     }
-
-    return true;
-}
-
-FieldKind mapPhysicsKindToField(const std::string& physicsKind)
-{
-    if (physicsKind == "electrostatics") {
-        return FieldKind::ElectricPotential;
-    }
-    if (physicsKind == "heat_transfer") {
-        return FieldKind::Temperature;
-    }
-    return FieldKind::Displacement;
 }
 
 } // namespace
 
-bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
+void MfemCoupledSolver::solve(FemMesh& mesh,
                               const PhysicsProblemModel& problemModel,
                               const PhysicsMaterialDatabase& materials,
-                              CoupledFieldResult& result,
-                              std::string& errorMessage) const
+                              CoupledFieldResult& result) const
 {
-    errorMessage.clear();
     result = CoupledFieldResult();
 
     // Create physics field solvers
@@ -114,9 +95,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
     electrostaticsSolver->setOrder(electroOrder);
     electrostaticsSolver->setSolver(createLinearSolver(
         electroConfig.type, electroConfig.maxIterations, electroConfig.relativeTolerance));
-    if (!electrostaticsSolver->initialize(mesh, problemModel, materials, errorMessage)) {
-        return false;
-    }
+    electrostaticsSolver->initialize(mesh, problemModel, materials);
 
     // Configure heat transfer solver
     int thermalOrder = getFieldOrder(FieldKind::Temperature);
@@ -124,9 +103,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
     heatTransferSolver->setOrder(thermalOrder);
     heatTransferSolver->setSolver(createLinearSolver(
         thermalConfig.type, thermalConfig.maxIterations, thermalConfig.relativeTolerance));
-    if (!heatTransferSolver->initialize(mesh, problemModel, materials, errorMessage)) {
-        return false;
-    }
+    heatTransferSolver->initialize(mesh, problemModel, materials);
 
     // Configure solid mechanics solver
     int mechOrder = getFieldOrder(FieldKind::Displacement);
@@ -134,9 +111,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
     solidMechanicsSolver->setOrder(mechOrder);
     solidMechanicsSolver->setSolver(createLinearSolver(
         mechConfig.type, mechConfig.maxIterations, mechConfig.relativeTolerance));
-    if (!solidMechanicsSolver->initialize(mesh, problemModel, materials, errorMessage)) {
-        return false;
-    }
+    solidMechanicsSolver->initialize(mesh, problemModel, materials);
 
     // Create coupling manager
     CouplingManager couplingManager;
@@ -149,20 +124,14 @@ bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
     couplingManager.setupCoupling();
 
     // Run coupled simulation
-    if (!couplingManager.run(errorMessage)) {
-        return false;
-    }
+    couplingManager.run();
 
     // Extract results
-    const mfem::GridFunction& potential = electrostaticsSolver->getField();
-    const mfem::GridFunction& temperature = heatTransferSolver->getField();
-    const mfem::GridFunction& displacement = solidMechanicsSolver->getField();
+    const FemGridFunction& potential = electrostaticsSolver->getField();
+    const FemGridFunction& temperature = heatTransferSolver->getField();
+    const FemGridFunction& displacement = solidMechanicsSolver->getField();
 
-    if (!recoverVertexSample(mesh, potential, temperature, displacement, result, errorMessage)) {
-        return false;
-    }
-
-    return true;
+    recoverVertexSample(mesh, potential, temperature, displacement, result);
 }
 
 } // namespace mpfem

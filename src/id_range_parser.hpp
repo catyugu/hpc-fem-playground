@@ -13,14 +13,8 @@ class IdRangeParser {
 public:
     /**
      * @brief Parses expressions like "1-3,8,10-12" into a unique id set.
-     * @param text Input expression.
-     * @param ids Parsed ids.
-     * @param errorMessage Error description when parsing fails.
-     * @return True when parsing succeeds.
      */
-    static bool parseIds(const std::string &text,
-                         std::set<int> &ids,
-                         std::string &errorMessage);
+    static void parseIds(const std::string &text, std::set<int> &ids);
 };
 
 } // namespace mpfem

@@ -5,11 +5,8 @@
 
 namespace mpfem {
 
-bool ValueParser::parseFirstNumber(const std::string &text,
-                                   double &value,
-                                   std::string &errorMessage)
+bool ValueParser::parseFirstNumber(const std::string &text, double &value)
 {
-    errorMessage.clear();
     value = 0.0;
 
     std::string token;
@@ -32,14 +29,12 @@ bool ValueParser::parseFirstNumber(const std::string &text,
     }
 
     if (token.empty()) {
-        errorMessage = "Cannot parse number from text: " + text;
         return false;
     }
 
     char *endPtr = nullptr;
     value = std::strtod(token.c_str(), &endPtr);
     if (endPtr == token.c_str()) {
-        errorMessage = "Invalid numeric token: " + token;
         return false;
     }
 

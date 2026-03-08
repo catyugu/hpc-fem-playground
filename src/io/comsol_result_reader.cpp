@@ -1,55 +1,31 @@
 #include "comsol_result_reader.hpp"
+#include "logger.hpp"
 
 #include <fstream>
 #include <sstream>
 
 namespace mpfem {
 
-bool ComsolResultReader::readFromFile(const std::string &filePath,
-                                      std::vector<ComsolResultRow> &rows,
-                                      std::string &errorMessage)
+void ComsolResultReader::readFromFile(const std::string &filePath, std::vector<ComsolResultRow> &rows)
 {
     rows.clear();
-    errorMessage.clear();
 
-    std::ifstream input(filePath.c_str());
-    if (!input.is_open()) {
-        errorMessage = "Cannot open COMSOL result file: " + filePath;
-        return false;
-    }
+    std::ifstream file(filePath);
+    Check(file.is_open(), "Cannot open COMSOL result file: " + filePath);
 
     std::string line;
-    while (std::getline(input, line)) {
-        if (line.empty()) {
-            continue;
-        }
-        if (line[0] == '%') {
-            continue;
-        }
-        if (line[0] == 'x' || line[0] == 'X') {
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '%') {
             continue;
         }
 
-        std::stringstream stream(line);
+        std::stringstream ss(line);
         ComsolResultRow row;
-        if (!(stream >> row.coordinate.x
-                     >> row.coordinate.y
-                     >> row.coordinate.z
-                     >> row.electricPotential
-                     >> row.temperature
-                     >> row.displacement)) {
-            continue;
-        }
-
+        ss >> row.x >> row.y >> row.z >> row.potential >> row.temperature >> row.displacement;
         rows.push_back(row);
     }
 
-    if (rows.empty()) {
-        errorMessage = "No numeric rows parsed from COMSOL result file: " + filePath;
-        return false;
-    }
-
-    return true;
+    Check(!rows.empty(), "No numeric rows parsed from COMSOL result file: " + filePath);
 }
 
 } // namespace mpfem

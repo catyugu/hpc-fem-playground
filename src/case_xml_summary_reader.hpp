@@ -22,14 +22,8 @@ class CaseXmlSummaryReader {
 public:
     /**
      * @brief Loads summary data from XML text.
-     * @param filePath Input XML file path.
-     * @param summary Output summary.
-     * @param errorMessage Error details when read fails.
-     * @return True when summary is available.
      */
-    static bool readFromFile(const std::string &filePath,
-                             CaseXmlSummary &summary,
-                             std::string &errorMessage);
+    static void readFromFile(const std::string &filePath, CaseXmlSummary &summary);
 };
 
 } // namespace mpfem

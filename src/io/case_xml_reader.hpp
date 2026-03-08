@@ -14,14 +14,8 @@ class CaseXmlReader {
 public:
     /**
      * @brief Parses case XML from disk.
-     * @param filePath Input case XML path.
-     * @param caseDefinition Parsed output model.
-     * @param errorMessage Error details on failure.
-     * @return True when parsing succeeds.
      */
-    static bool readFromFile(const std::string &filePath,
-                             CaseDefinition &caseDefinition,
-                             std::string &errorMessage);
+    static void readFromFile(const std::string &filePath, CaseDefinition &caseDefinition);
 };
 
 } // namespace mpfem

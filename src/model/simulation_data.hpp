@@ -15,6 +15,18 @@ struct Coordinate3D {
 };
 
 /**
+ * @brief Single row from COMSOL result file.
+ */
+struct ComsolResultRow {
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+    double potential = 0.0;
+    double temperature = 0.0;
+    double displacement = 0.0;
+};
+
+/**
  * @brief Coupled baseline simulation result fields.
  */
 struct CoupledFieldResult {

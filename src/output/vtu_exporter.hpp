@@ -8,20 +8,14 @@
 namespace mpfem {
 
 /**
- * @brief Exports sampled fields to VTU unstructured grid format.
+ * @brief Exports results in VTU format.
  */
 class VtuExporter {
 public:
     /**
-     * @brief Writes point-vertex VTU with scalar fields.
-     * @param outputPath Target file path.
-     * @param result Coupled field result.
-     * @param errorMessage Error details on failure.
-     * @return True when write succeeds.
+     * @brief Writes results to file.
      */
-    static bool write(const std::string &outputPath,
-                      const CoupledFieldResult &result,
-                      std::string &errorMessage);
+    static void write(const std::string &filePath, const CoupledFieldResult &result);
 };
 
 } // namespace mpfem

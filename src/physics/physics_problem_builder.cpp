@@ -1,6 +1,6 @@
 #include "physics_problem_builder.hpp"
-
 #include "value_parser.hpp"
+#include "logger.hpp"
 
 namespace mpfem {
 
@@ -31,7 +31,6 @@ BoundaryConditionKind mapBoundaryKind(const std::string &boundaryKind)
     if (boundaryKind == "free_boundary") {
         return BoundaryConditionKind::Free;
     }
-
     return BoundaryConditionKind::Insulation;
 }
 
@@ -43,68 +42,55 @@ CouplingKind mapCouplingKind(const std::string &couplingKind)
     if (couplingKind == "thermal_expansion") {
         return CouplingKind::ThermalExpansion;
     }
-
     return CouplingKind::Unknown;
 }
 
 double getValueOrDefault(const std::map<std::string, double> &values,
                          const std::string &name,
-                         const double defaultValue)
+                         double defaultValue)
 {
-    const std::map<std::string, double>::const_iterator iter = values.find(name);
+    auto iter = values.find(name);
     if (iter == values.end()) {
-        double parsedValue = 0.0;
-        std::string errorMessage;
-        if (ValueParser::parseFirstNumber(name, parsedValue, errorMessage)) {
-            return parsedValue;
-        }
-        return defaultValue;
+        double result = defaultValue;
+        ValueParser::parseFirstNumber(name, result);
+        return result;
     }
     return iter->second;
 }
 
 } // namespace
 
-bool PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
-                                  const MaterialDatabase &materialDatabase,
-                                  PhysicsProblemModel &problemModel,
-                                  PhysicsMaterialDatabase &physicsMaterials,
-                                  std::string &errorMessage)
+void PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
+                                  const PhysicsMaterialDatabase &materials,
+                                  PhysicsProblemModel &problemModel)
 {
-    errorMessage.clear();
     problemModel = PhysicsProblemModel();
-    physicsMaterials = PhysicsMaterialDatabase();
 
     problemModel.caseName = caseDefinition.caseName;
     problemModel.studyType = caseDefinition.studyType;
     problemModel.meshPath = caseDefinition.meshPath;
     problemModel.comsolResultPath = caseDefinition.comsolResultPath;
 
-    for (std::size_t i = 0; i < caseDefinition.variables.size(); ++i) {
-        problemModel.variables[caseDefinition.variables[i].name] = caseDefinition.variables[i].siValue;
+    for (const auto& variable : caseDefinition.variables) {
+        problemModel.variables[variable.name] = variable.siValue;
     }
 
-    for (std::size_t i = 0; i < caseDefinition.materialAssignments.size(); ++i) {
-        const MaterialAssignment &assignment = caseDefinition.materialAssignments[i];
-        for (std::set<int>::const_iterator domainIter = assignment.domainIds.begin();
-             domainIter != assignment.domainIds.end();
-             ++domainIter) {
-            problemModel.domainMaterialTag[*domainIter] = assignment.materialTag;
+    for (const auto& assignment : caseDefinition.materialAssignments) {
+        for (int domain : assignment.domainIds) {
+            problemModel.domainMaterialTag[domain] = assignment.materialTag;
         }
     }
 
-    for (std::size_t i = 0; i < caseDefinition.physicsDefinitions.size(); ++i) {
-        const PhysicsDefinition &physicsDefinition = caseDefinition.physicsDefinitions[i];
-        const FieldKind fieldKind = mapPhysicsKindToField(physicsDefinition.kind);
+    for (const auto& physicsDef : caseDefinition.physicsDefinitions) {
+        const FieldKind fieldKind = mapPhysicsKindToField(physicsDef.kind);
 
-        // Store field configuration (order and solver settings)
+        // Store field configuration
         FieldConfig fieldConfig;
-        fieldConfig.order = physicsDefinition.order;
-        fieldConfig.solver = physicsDefinition.solver;
+        fieldConfig.order = physicsDef.order;
+        fieldConfig.solver = physicsDef.solver;
         problemModel.fieldConfigs[fieldKind] = fieldConfig;
 
-        for (std::size_t j = 0; j < physicsDefinition.boundaries.size(); ++j) {
-            const BoundaryCondition &boundary = physicsDefinition.boundaries[j];
+        for (const auto& boundary : physicsDef.boundaries) {
             FieldBoundaryCondition modelBoundary;
             modelBoundary.field = fieldKind;
             modelBoundary.kind = mapBoundaryKind(boundary.kind);
@@ -114,8 +100,7 @@ bool PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
             problemModel.boundaries.push_back(modelBoundary);
         }
 
-        for (std::size_t j = 0; j < physicsDefinition.sources.size(); ++j) {
-            const SourceDefinition &source = physicsDefinition.sources[j];
+        for (const auto& source : physicsDef.sources) {
             FieldSource modelSource;
             modelSource.field = fieldKind;
             modelSource.domainIds = source.domainIds;
@@ -126,34 +111,14 @@ bool PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
         }
     }
 
-    for (std::size_t i = 0; i < caseDefinition.coupledPhysicsDefinitions.size(); ++i) {
-        problemModel.couplings.push_back(mapCouplingKind(caseDefinition.coupledPhysicsDefinitions[i].kind));
+    for (const auto& couplingDef : caseDefinition.coupledPhysicsDefinitions) {
+        problemModel.couplings.push_back(mapCouplingKind(couplingDef.kind));
     }
 
-    // Pass coupling configuration
     problemModel.couplingConfig = caseDefinition.couplingConfig;
 
-    for (std::size_t i = 0; i < materialDatabase.materials.size(); ++i) {
-        const MaterialDefinition &material = materialDatabase.materials[i];
-        MaterialPropertyModel property;
-        property.tag = material.tag;
-        property.youngModulus = getValueOrDefault(material.siProperties, "E", 1.0);
-        property.poissonRatio = getValueOrDefault(material.siProperties, "nu", 0.3);
-        property.rho0 = getValueOrDefault(material.siProperties, "rho0", 0.0);
-        property.alpha = getValueOrDefault(material.siProperties, "alpha", 0.0);
-        property.tref = getValueOrDefault(material.siProperties, "Tref", 293.15);
-        property.electricConductivity = getValueOrDefault(material.siProperties, "electricconductivity", 1.0);
-        property.thermalConductivity = getValueOrDefault(material.siProperties, "thermalconductivity", 1.0);
-        property.thermalExpansion = getValueOrDefault(material.siProperties, "thermalexpansioncoefficient", 1.0e-5);
-        physicsMaterials.byTag[property.tag] = property;
-    }
-
-    if (problemModel.domainMaterialTag.empty()) {
-        errorMessage = "No domain-material mapping found while building physics model";
-        return false;
-    }
-
-    return true;
+    Check(!problemModel.domainMaterialTag.empty(), 
+          "No domain-material mapping found while building physics model");
 }
 
 } // namespace mpfem

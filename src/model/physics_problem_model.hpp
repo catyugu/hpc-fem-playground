@@ -68,6 +68,8 @@ struct PhysicsProblemModel {
 
 struct MaterialPropertyModel {
     std::string tag;
+    std::string label;
+    std::map<std::string, double> properties;
     double youngModulus = 0.0;
     double poissonRatio = 0.0;
     double rho0 = 0.0;

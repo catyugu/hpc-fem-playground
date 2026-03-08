@@ -8,20 +8,14 @@
 namespace mpfem {
 
 /**
- * @brief Exports simulation data in COMSOL-like text format.
+ * @brief Exports results in COMSOL text format.
  */
 class ComsolTextExporter {
 public:
     /**
-     * @brief Writes `x y z V T disp` table with metadata header.
-     * @param outputPath Target file path.
-     * @param result Coupled field result.
-     * @param errorMessage Error details on failure.
-     * @return True when write succeeds.
+     * @brief Writes results to file.
      */
-    static bool write(const std::string &outputPath,
-                      const CoupledFieldResult &result,
-                      std::string &errorMessage);
+    static void write(const std::string &filePath, const CoupledFieldResult &result);
 };
 
 } // namespace mpfem

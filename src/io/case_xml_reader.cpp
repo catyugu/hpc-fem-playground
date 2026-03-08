@@ -1,27 +1,25 @@
 #include "case_xml_reader.hpp"
-
 #include "id_range_parser.hpp"
 #include "value_parser.hpp"
+#include "logger.hpp"
 
 #include "general/tinyxml2.h"
 
 #include <sstream>
 #include <string>
+#include <cstdlib>
 
 namespace mpfem {
 
 namespace {
 
-bool parseIdAttribute(const char *attributeText,
-                      std::set<int> &target,
-                      std::string &errorMessage)
+void parseIdAttribute(const char *attributeText, std::set<int> &target)
 {
-    if (attributeText == NULL) {
+    if (attributeText == nullptr) {
         target.clear();
-        return true;
+        return;
     }
-
-    return IdRangeParser::parseIds(attributeText, target, errorMessage);
+    IdRangeParser::parseIds(attributeText, target);
 }
 
 void splitCsv(const std::string &csv, std::vector<std::string> &tokens)
@@ -45,66 +43,52 @@ void splitCsv(const std::string &csv, std::vector<std::string> &tokens)
 
 } // namespace
 
-bool CaseXmlReader::readFromFile(const std::string &filePath,
-                                 CaseDefinition &caseDefinition,
-                                 std::string &errorMessage)
+void CaseXmlReader::readFromFile(const std::string &filePath, CaseDefinition &caseDefinition)
 {
     caseDefinition = CaseDefinition();
-    errorMessage.clear();
 
     tinyxml2::XMLDocument document;
     const tinyxml2::XMLError loadError = document.LoadFile(filePath.c_str());
-    if (loadError != tinyxml2::XML_SUCCESS) {
-        errorMessage = "Failed to parse XML file: " + filePath;
-        return false;
-    }
+    Check(loadError == tinyxml2::XML_SUCCESS, "Failed to parse XML file: " + filePath);
 
     const tinyxml2::XMLElement *caseElement = document.FirstChildElement("case");
-    if (caseElement == NULL) {
-        errorMessage = "Missing <case> root node";
-        return false;
-    }
-    if (caseElement->Attribute("name") != NULL) {
+    Check(caseElement != nullptr, "Missing <case> root node");
+    
+    if (caseElement->Attribute("name") != nullptr) {
         caseDefinition.caseName = caseElement->Attribute("name");
     }
 
     const tinyxml2::XMLElement *studyElement = caseElement->FirstChildElement("study");
-    if (studyElement != NULL && studyElement->Attribute("type") != NULL) {
+    if (studyElement != nullptr && studyElement->Attribute("type") != nullptr) {
         caseDefinition.studyType = studyElement->Attribute("type");
     }
 
     const tinyxml2::XMLElement *pathsElement = caseElement->FirstChildElement("paths");
-    if (pathsElement != NULL) {
-        if (pathsElement->Attribute("mesh") != NULL) {
+    if (pathsElement != nullptr) {
+        if (pathsElement->Attribute("mesh") != nullptr) {
             caseDefinition.meshPath = pathsElement->Attribute("mesh");
         }
-        if (pathsElement->Attribute("materials") != NULL) {
+        if (pathsElement->Attribute("materials") != nullptr) {
             caseDefinition.materialsPath = pathsElement->Attribute("materials");
         }
-        if (pathsElement->Attribute("comsol_result") != NULL) {
+        if (pathsElement->Attribute("comsol_result") != nullptr) {
             caseDefinition.comsolResultPath = pathsElement->Attribute("comsol_result");
         }
     }
 
     const tinyxml2::XMLElement *variablesElement = caseElement->FirstChildElement("variables");
-    if (variablesElement != NULL) {
+    if (variablesElement != nullptr) {
         const tinyxml2::XMLElement *variableElement = variablesElement->FirstChildElement("var");
-        while (variableElement != NULL) {
+        while (variableElement != nullptr) {
             VariableEntry entry;
-            if (variableElement->Attribute("name") != NULL) {
+            if (variableElement->Attribute("name") != nullptr) {
                 entry.name = variableElement->Attribute("name");
             }
-            if (variableElement->Attribute("value") != NULL) {
+            if (variableElement->Attribute("value") != nullptr) {
                 entry.valueText = variableElement->Attribute("value");
             }
-            if (variableElement->Attribute("si") != NULL) {
-                double parsedSi = 0.0;
-                std::string parseError;
-                if (!ValueParser::parseFirstNumber(variableElement->Attribute("si"), parsedSi, parseError)) {
-                    errorMessage = "Failed to parse variable SI value for " + entry.name + ": " + parseError;
-                    return false;
-                }
-                entry.siValue = parsedSi;
+            if (variableElement->Attribute("si") != nullptr) {
+                ValueParser::parseFirstNumber(variableElement->Attribute("si"), entry.siValue);
             }
             caseDefinition.variables.push_back(entry);
             variableElement = variableElement->NextSiblingElement("var");
@@ -112,29 +96,26 @@ bool CaseXmlReader::readFromFile(const std::string &filePath,
     }
 
     const tinyxml2::XMLElement *materialsElement = caseElement->FirstChildElement("materials");
-    if (materialsElement != NULL) {
+    if (materialsElement != nullptr) {
         const tinyxml2::XMLElement *assignElement = materialsElement->FirstChildElement("assign");
-        while (assignElement != NULL) {
+        while (assignElement != nullptr) {
             MaterialAssignment assignment;
-            if (assignElement->Attribute("material") != NULL) {
+            if (assignElement->Attribute("material") != nullptr) {
                 assignment.materialTag = assignElement->Attribute("material");
             }
-            if (!parseIdAttribute(assignElement->Attribute("domains"), assignment.domainIds, errorMessage)) {
-                errorMessage = "Failed to parse material assignment domains: " + errorMessage;
-                return false;
-            }
+            parseIdAttribute(assignElement->Attribute("domains"), assignment.domainIds);
             caseDefinition.materialAssignments.push_back(assignment);
             assignElement = assignElement->NextSiblingElement("assign");
         }
     }
 
     const tinyxml2::XMLElement *physicsElement = caseElement->FirstChildElement("physics");
-    while (physicsElement != NULL) {
+    while (physicsElement != nullptr) {
         PhysicsDefinition physics;
-        if (physicsElement->Attribute("kind") != NULL) {
+        if (physicsElement->Attribute("kind") != nullptr) {
             physics.kind = physicsElement->Attribute("kind");
         }
-        if (physicsElement->Attribute("order") != NULL) {
+        if (physicsElement->Attribute("order") != nullptr) {
             physics.order = std::atoi(physicsElement->Attribute("order"));
             if (physics.order < 1) {
                 physics.order = 1;
@@ -143,54 +124,48 @@ bool CaseXmlReader::readFromFile(const std::string &filePath,
 
         // Parse solver configuration
         const tinyxml2::XMLElement *solverElement = physicsElement->FirstChildElement("solver");
-        if (solverElement != NULL) {
-            if (solverElement->Attribute("type") != NULL) {
+        if (solverElement != nullptr) {
+            if (solverElement->Attribute("type") != nullptr) {
                 physics.solver.type = solverElement->Attribute("type");
             }
-            if (solverElement->Attribute("max_iter") != NULL) {
+            if (solverElement->Attribute("max_iter") != nullptr) {
                 physics.solver.maxIterations = std::atoi(solverElement->Attribute("max_iter"));
             }
-            if (solverElement->Attribute("tolerance") != NULL) {
+            if (solverElement->Attribute("tolerance") != nullptr) {
                 physics.solver.relativeTolerance = std::atof(solverElement->Attribute("tolerance"));
             }
-            if (solverElement->Attribute("print_level") != NULL) {
+            if (solverElement->Attribute("print_level") != nullptr) {
                 physics.solver.printLevel = std::atoi(solverElement->Attribute("print_level"));
             }
         }
 
         const tinyxml2::XMLElement *boundaryElement = physicsElement->FirstChildElement("boundary");
-        while (boundaryElement != NULL) {
+        while (boundaryElement != nullptr) {
             BoundaryCondition boundary;
-            if (boundaryElement->Attribute("kind") != NULL) {
+            if (boundaryElement->Attribute("kind") != nullptr) {
                 boundary.kind = boundaryElement->Attribute("kind");
             }
-            if (boundaryElement->Attribute("value") != NULL) {
+            if (boundaryElement->Attribute("value") != nullptr) {
                 boundary.valueText = boundaryElement->Attribute("value");
             }
-            if (boundaryElement->Attribute("aux") != NULL) {
+            if (boundaryElement->Attribute("aux") != nullptr) {
                 boundary.auxText = boundaryElement->Attribute("aux");
             }
-            if (!parseIdAttribute(boundaryElement->Attribute("ids"), boundary.ids, errorMessage)) {
-                errorMessage = "Failed to parse boundary ids: " + errorMessage;
-                return false;
-            }
+            parseIdAttribute(boundaryElement->Attribute("ids"), boundary.ids);
             physics.boundaries.push_back(boundary);
             boundaryElement = boundaryElement->NextSiblingElement("boundary");
         }
 
         const tinyxml2::XMLElement *sourceElement = physicsElement->FirstChildElement("source");
-        while (sourceElement != NULL) {
+        while (sourceElement != nullptr) {
             SourceDefinition source;
-            if (sourceElement->Attribute("kind") != NULL) {
+            if (sourceElement->Attribute("kind") != nullptr) {
                 source.kind = sourceElement->Attribute("kind");
             }
-            if (sourceElement->Attribute("value") != NULL) {
+            if (sourceElement->Attribute("value") != nullptr) {
                 source.valueText = sourceElement->Attribute("value");
             }
-            if (!parseIdAttribute(sourceElement->Attribute("domains"), source.domainIds, errorMessage)) {
-                errorMessage = "Failed to parse source domains: " + errorMessage;
-                return false;
-            }
+            parseIdAttribute(sourceElement->Attribute("domains"), source.domainIds);
             physics.sources.push_back(source);
             sourceElement = sourceElement->NextSiblingElement("source");
         }
@@ -200,40 +175,35 @@ bool CaseXmlReader::readFromFile(const std::string &filePath,
     }
 
     const tinyxml2::XMLElement *coupledElement = caseElement->FirstChildElement("coupledPhysics");
-    while (coupledElement != NULL) {
+    while (coupledElement != nullptr) {
         CoupledPhysicsDefinition coupling;
-        if (coupledElement->Attribute("name") != NULL) {
+        if (coupledElement->Attribute("name") != nullptr) {
             coupling.name = coupledElement->Attribute("name");
         }
-        if (coupledElement->Attribute("kind") != NULL) {
+        if (coupledElement->Attribute("kind") != nullptr) {
             coupling.kind = coupledElement->Attribute("kind");
         }
-        if (coupledElement->Attribute("physics") != NULL) {
+        if (coupledElement->Attribute("physics") != nullptr) {
             splitCsv(coupledElement->Attribute("physics"), coupling.physicsKinds);
         }
-        if (!parseIdAttribute(coupledElement->Attribute("domains"), coupling.domainIds, errorMessage)) {
-            errorMessage = "Failed to parse coupled physics domains: " + errorMessage;
-            return false;
-        }
+        parseIdAttribute(coupledElement->Attribute("domains"), coupling.domainIds);
         caseDefinition.coupledPhysicsDefinitions.push_back(coupling);
         coupledElement = coupledElement->NextSiblingElement("coupledPhysics");
     }
 
-    // Parse coupling configuration (new format)
+    // Parse coupling configuration
     const tinyxml2::XMLElement *couplingConfigElement = caseElement->FirstChildElement("coupling");
-    if (couplingConfigElement != NULL) {
-        if (couplingConfigElement->Attribute("method") != NULL) {
+    if (couplingConfigElement != nullptr) {
+        if (couplingConfigElement->Attribute("method") != nullptr) {
             caseDefinition.couplingConfig.method = couplingConfigElement->Attribute("method");
         }
-        if (couplingConfigElement->Attribute("max_iter") != NULL) {
+        if (couplingConfigElement->Attribute("max_iter") != nullptr) {
             caseDefinition.couplingConfig.maxIterations = std::atoi(couplingConfigElement->Attribute("max_iter"));
         }
-        if (couplingConfigElement->Attribute("tolerance") != NULL) {
+        if (couplingConfigElement->Attribute("tolerance") != nullptr) {
             caseDefinition.couplingConfig.tolerance = std::atof(couplingConfigElement->Attribute("tolerance"));
         }
     }
-
-    return true;
 }
 
 } // namespace mpfem

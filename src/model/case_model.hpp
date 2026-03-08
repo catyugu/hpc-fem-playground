@@ -8,6 +8,14 @@
 namespace mpfem {
 
 /**
+ * @brief Coupling iteration method.
+ */
+enum class CouplingMethod {
+    NewtonRaphson,
+    Picard
+};
+
+/**
  * @brief Scalar variable definition from case XML.
  */
 struct VariableEntry {
@@ -72,6 +80,14 @@ struct CouplingConfig {
     int maxIterations = 15;
     double tolerance = 1e-6;
 };
+
+/**
+ * @brief Convert method string to enum.
+ */
+inline CouplingMethod parseCouplingMethod(const std::string& method) {
+    if (method == "picard") return CouplingMethod::Picard;
+    return CouplingMethod::NewtonRaphson;
+}
 
 /**
  * @brief Cross-physics coupling definition extracted from case XML.
