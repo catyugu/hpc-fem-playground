@@ -11,13 +11,14 @@
 
 int main(int argc, char **argv)
 {
-    const int EXPECTED_ARGUMENT_COUNT = 3;
+    const int EXPECTED_ARGUMENT_COUNT = 4;
     if (argc < EXPECTED_ARGUMENT_COUNT) {
         return 1;
     }
 
     const std::filesystem::path casePath(argv[1]);
     const std::filesystem::path materialPath(argv[2]);
+    const std::filesystem::path projectRoot(argv[3]);
     const std::filesystem::path caseDirectory = casePath.parent_path();
 
     mpfem::CaseDefinition caseDefinition;
@@ -43,9 +44,12 @@ int main(int argc, char **argv)
 
     const std::filesystem::path mphtxtPath = caseDirectory / caseDefinition.meshPath;
     std::filesystem::path gmshPath = mphtxtPath;
-    gmshPath.replace_extension(".msh");
+    gmshPath.replace_extension(".mesh");
 
-    const std::string command = std::string("python3 scripts/mphtxt_to_gmsh.py ")
+    const std::filesystem::path converterPath = projectRoot / "scripts" / "mphtxt_to_mfem_mesh.py";
+    const std::string command = std::string("python3 ")
+                                + converterPath.string()
+                                + " "
                                 + mphtxtPath.string()
                                 + " "
                                 + gmshPath.string();

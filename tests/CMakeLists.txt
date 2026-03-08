@@ -38,4 +38,5 @@ add_test(
     COMMAND test_mfem_coupled_solver
             ${PROJECT_SOURCE_DIR}/cases/busbar/case.xml
             ${PROJECT_SOURCE_DIR}/cases/busbar/material.xml
+            ${PROJECT_SOURCE_DIR}
 )

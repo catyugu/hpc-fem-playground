@@ -63,8 +63,8 @@ int main(int argc, char **argv)
     std::filesystem::path mfemMeshPath = meshPath;
     if (meshPath.extension() == ".mphtxt") {
         mfemMeshPath = meshPath;
-        mfemMeshPath.replace_extension(".msh");
-        const std::string convertCommand = std::string("python3 scripts/mphtxt_to_gmsh.py ")
+        mfemMeshPath.replace_extension(".mesh");
+        const std::string convertCommand = std::string("python3 scripts/mphtxt_to_mfem_mesh.py ")
                                            + meshPath.string()
                                            + " "
                                            + mfemMeshPath.string();
