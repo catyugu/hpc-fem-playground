@@ -47,6 +47,11 @@ struct FieldSource {
     double value = 0.0;
 };
 
+struct FieldConfig {
+    int order = 1;
+    SolverConfig solver;
+};
+
 struct PhysicsProblemModel {
     std::string caseName;
     std::string studyType;
@@ -57,6 +62,8 @@ struct PhysicsProblemModel {
     std::vector<FieldBoundaryCondition> boundaries;
     std::vector<FieldSource> sources;
     std::vector<CouplingKind> couplings;
+    std::map<FieldKind, FieldConfig> fieldConfigs;
+    CouplingConfig couplingConfig;
 };
 
 struct MaterialPropertyModel {

@@ -44,12 +44,33 @@ struct SourceDefinition {
 };
 
 /**
+ * @brief Linear solver configuration.
+ */
+struct SolverConfig {
+    std::string type = "cg_gs";  // "cg_gs", "hypre_boomeramg", "hypre_amg", "gmres"
+    int maxIterations = 1000;
+    double relativeTolerance = 1e-10;
+    int printLevel = 0;
+};
+
+/**
  * @brief Physics block extracted from case XML.
  */
 struct PhysicsDefinition {
     std::string kind;
+    int order = 1;  // Polynomial order for this physics field
+    SolverConfig solver;
     std::vector<BoundaryCondition> boundaries;
     std::vector<SourceDefinition> sources;
+};
+
+/**
+ * @brief Coupling iteration configuration.
+ */
+struct CouplingConfig {
+    std::string method = "newton_raphson";  // "newton_raphson", "picard"
+    int maxIterations = 15;
+    double tolerance = 1e-6;
 };
 
 /**
@@ -75,6 +96,7 @@ struct CaseDefinition {
     std::vector<MaterialAssignment> materialAssignments;
     std::vector<PhysicsDefinition> physicsDefinitions;
     std::vector<CoupledPhysicsDefinition> coupledPhysicsDefinitions;
+    CouplingConfig couplingConfig;
 };
 
 } // namespace mpfem

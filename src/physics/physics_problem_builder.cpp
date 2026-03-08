@@ -97,6 +97,12 @@ bool PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
         const PhysicsDefinition &physicsDefinition = caseDefinition.physicsDefinitions[i];
         const FieldKind fieldKind = mapPhysicsKindToField(physicsDefinition.kind);
 
+        // Store field configuration (order and solver settings)
+        FieldConfig fieldConfig;
+        fieldConfig.order = physicsDefinition.order;
+        fieldConfig.solver = physicsDefinition.solver;
+        problemModel.fieldConfigs[fieldKind] = fieldConfig;
+
         for (std::size_t j = 0; j < physicsDefinition.boundaries.size(); ++j) {
             const BoundaryCondition &boundary = physicsDefinition.boundaries[j];
             FieldBoundaryCondition modelBoundary;
@@ -123,6 +129,9 @@ bool PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
     for (std::size_t i = 0; i < caseDefinition.coupledPhysicsDefinitions.size(); ++i) {
         problemModel.couplings.push_back(mapCouplingKind(caseDefinition.coupledPhysicsDefinitions[i].kind));
     }
+
+    // Pass coupling configuration
+    problemModel.couplingConfig = caseDefinition.couplingConfig;
 
     for (std::size_t i = 0; i < materialDatabase.materials.size(); ++i) {
         const MaterialDefinition &material = materialDatabase.materials[i];

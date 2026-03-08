@@ -23,23 +23,28 @@
     <assign domains="2-7" material="mat2" />
   </materials>
 
-  <physics kind="electrostatics">
+  <physics kind="electrostatics" order="1">
+    <solver type="cg_gs" max_iter="4000" tolerance="1e-10" print_level="0"/>
     <boundary kind="voltage" ids="43" value="Vtot" />
     <boundary kind="voltage" ids="8,15" value="0[V]" />
     <boundary kind="electric_insulation" ids="1-7,9-14,16-42" />
   </physics>
 
-  <physics kind="heat_transfer">
+  <physics kind="heat_transfer" order="1">
+    <solver type="cg_gs" max_iter="4000" tolerance="1e-10" print_level="0"/>
     <boundary kind="convection" ids="1-7,9-14,16-42" value="htc" aux="293.15[K]" />
     <boundary kind="thermal_insulation" ids="8,15,43" />
     <source kind="volumetric_heat_source" domains="1-7" value="joule_heating" />
   </physics>
 
-  <physics kind="solid_mechanics">
+  <physics kind="solid_mechanics" order="1">
+    <solver type="cg_gs" max_iter="6000" tolerance="1e-9" print_level="0"/>
     <boundary kind="fixed_constraint" ids="8,15,43" value="0[m]" />
     <boundary kind="free_boundary" ids="1-7,9-14,16-42" />
   </physics>
 
   <coupledPhysics name="joule_heat" kind="joule_heating" physics="electrostatics,heat_transfer" domains="1-7" />
   <coupledPhysics name="thermal_expansion" kind="thermal_expansion" physics="heat_transfer,solid_mechanics" domains="1-7" />
+
+  <coupling method="newton_raphson" max_iter="15" tolerance="1e-6"/>
 </case>

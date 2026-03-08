@@ -134,6 +134,29 @@ bool CaseXmlReader::readFromFile(const std::string &filePath,
         if (physicsElement->Attribute("kind") != NULL) {
             physics.kind = physicsElement->Attribute("kind");
         }
+        if (physicsElement->Attribute("order") != NULL) {
+            physics.order = std::atoi(physicsElement->Attribute("order"));
+            if (physics.order < 1) {
+                physics.order = 1;
+            }
+        }
+
+        // Parse solver configuration
+        const tinyxml2::XMLElement *solverElement = physicsElement->FirstChildElement("solver");
+        if (solverElement != NULL) {
+            if (solverElement->Attribute("type") != NULL) {
+                physics.solver.type = solverElement->Attribute("type");
+            }
+            if (solverElement->Attribute("max_iter") != NULL) {
+                physics.solver.maxIterations = std::atoi(solverElement->Attribute("max_iter"));
+            }
+            if (solverElement->Attribute("tolerance") != NULL) {
+                physics.solver.relativeTolerance = std::atof(solverElement->Attribute("tolerance"));
+            }
+            if (solverElement->Attribute("print_level") != NULL) {
+                physics.solver.printLevel = std::atoi(solverElement->Attribute("print_level"));
+            }
+        }
 
         const tinyxml2::XMLElement *boundaryElement = physicsElement->FirstChildElement("boundary");
         while (boundaryElement != NULL) {
@@ -194,6 +217,20 @@ bool CaseXmlReader::readFromFile(const std::string &filePath,
         }
         caseDefinition.coupledPhysicsDefinitions.push_back(coupling);
         coupledElement = coupledElement->NextSiblingElement("coupledPhysics");
+    }
+
+    // Parse coupling configuration (new format)
+    const tinyxml2::XMLElement *couplingConfigElement = caseElement->FirstChildElement("coupling");
+    if (couplingConfigElement != NULL) {
+        if (couplingConfigElement->Attribute("method") != NULL) {
+            caseDefinition.couplingConfig.method = couplingConfigElement->Attribute("method");
+        }
+        if (couplingConfigElement->Attribute("max_iter") != NULL) {
+            caseDefinition.couplingConfig.maxIterations = std::atoi(couplingConfigElement->Attribute("max_iter"));
+        }
+        if (couplingConfigElement->Attribute("tolerance") != NULL) {
+            caseDefinition.couplingConfig.tolerance = std::atof(couplingConfigElement->Attribute("tolerance"));
+        }
     }
 
     return true;
