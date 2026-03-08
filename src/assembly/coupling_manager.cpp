@@ -1,10 +1,14 @@
 #include "coupling_manager.hpp"
 #include "electrostatics_solver.hpp"
 #include "heat_transfer_solver.hpp"
+#include "logger.hpp"
 #include "solid_mechanics_solver.hpp"
 
 #include <cmath>
 #include <algorithm>
+#include <functional>
+#include <sstream>
+#include <iomanip>
 
 namespace mpfem {
 
@@ -25,7 +29,21 @@ public:
     bool runPicard(std::string& errorMessage);
     void savePreviousSolutions();
     bool checkConvergence();
+
+    // Helper: execute assemble + solve for a field
+    bool solveField(PhysicsFieldSolver* solver,
+                    const std::string& label,
+                    std::string& errorMessage);
 };
+
+bool CouplingManager::Impl::solveField(PhysicsFieldSolver* solver,
+                                        const std::string& label,
+                                        std::string& errorMessage)
+{
+    ScopedTimer timer(label);
+    solver->applyBoundaryConditions();
+    return solver->assemble(errorMessage) && solver->solve(errorMessage);
+}
 
 double CouplingManager::Impl::computeFieldDelta(const mfem::GridFunction& previous,
                                                  const mfem::GridFunction& current)
@@ -97,6 +115,8 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
         numIterations_ = iter + 1;
         savePreviousSolutions();
 
+        Logger::log(LogLevel::Info, "--- Coupling iteration " + std::to_string(iter + 1) + " ---");
+
         // Step 1: Solve electrostatics (with temperature-dependent conductivity)
         auto electroIter = solvers_.find(FieldKind::ElectricPotential);
         if (electroIter != solvers_.end()) {
@@ -108,13 +128,7 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
                 electroSolver->setTemperatureField(&tempIter->second->getField());
             }
 
-            // Apply boundary conditions before each solve
-            electroIter->second->applyBoundaryConditions();
-
-            if (!electroIter->second->assemble(errorMessage)) {
-                return false;
-            }
-            if (!electroIter->second->solve(errorMessage)) {
+            if (!solveField(electroIter->second, "Electrostatics solve", errorMessage)) {
                 return false;
             }
         }
@@ -132,13 +146,7 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
                         ->getConductivityCoefficient());
             }
 
-            // Apply boundary conditions before each solve
-            heatIter->second->applyBoundaryConditions();
-
-            if (!heatIter->second->assemble(errorMessage)) {
-                return false;
-            }
-            if (!heatIter->second->solve(errorMessage)) {
+            if (!solveField(heatIter->second, "Heat transfer solve", errorMessage)) {
                 return false;
             }
         }
@@ -153,13 +161,7 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
                 mechSolver->setTemperatureField(&heatIter->second->getField());
             }
 
-            // Apply boundary conditions before each solve
-            mechIter->second->applyBoundaryConditions();
-
-            if (!mechIter->second->assemble(errorMessage)) {
-                return false;
-            }
-            if (!mechIter->second->solve(errorMessage)) {
+            if (!solveField(mechIter->second, "Solid mechanics solve", errorMessage)) {
                 return false;
             }
         }
@@ -167,6 +169,7 @@ bool CouplingManager::Impl::runNewtonRaphson(std::string& errorMessage)
         // Check convergence
         if (checkConvergence()) {
             converged_ = true;
+            Logger::log(LogLevel::Info, "Coupling converged after " + std::to_string(numIterations_) + " iterations");
             return true;
         }
     }

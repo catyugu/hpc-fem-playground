@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
     mpfem::MfemCoupledSolver solver;
     mpfem::CoupledFieldResult result;
-    if (!solver.solve(mesh, problemModel, physicsMaterials, 6, 1e-6, result, errorMessage)) {
+    if (!solver.solve(mesh, problemModel, physicsMaterials, result, errorMessage)) {
         return 1;
     }
 

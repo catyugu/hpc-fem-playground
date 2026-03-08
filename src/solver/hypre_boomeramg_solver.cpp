@@ -78,7 +78,6 @@ bool HYPREBoomerAMGSolver::solve(mfem::SparseMatrix& matrix,
     return true;
 #else
     // Fallback to CG+GS if HYPRE is not available
-    errorMessage = "HYPRE not available, falling back to CG+GS";
     mfem::GSSmoother preconditioner(matrix);
     mfem::CGSolver cgSolver;
     cgSolver.SetPreconditioner(preconditioner);
@@ -92,7 +91,15 @@ bool HYPREBoomerAMGSolver::solve(mfem::SparseMatrix& matrix,
     numIterations_ = cgSolver.GetNumIterations();
     finalResidual_ = cgSolver.GetFinalNorm();
     
-    return cgSolver.GetConverged();
+    if (!cgSolver.GetConverged()) {
+        errorMessage = "CG solver (HYPRE fallback) did not converge after "
+                     + std::to_string(numIterations_)
+                     + " iterations. Final residual: "
+                     + std::to_string(finalResidual_);
+        return false;
+    }
+    
+    return true;
 #endif
 }
 

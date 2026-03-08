@@ -80,8 +80,6 @@ FieldKind mapPhysicsKindToField(const std::string& physicsKind)
 bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
                               const PhysicsProblemModel& problemModel,
                               const PhysicsMaterialDatabase& materials,
-                              int maxIterations,
-                              double tolerance,
                               CoupledFieldResult& result,
                               std::string& errorMessage) const
 {
@@ -145,16 +143,7 @@ bool MfemCoupledSolver::solve(mfem::Mesh& mesh,
     couplingManager.registerField(FieldKind::ElectricPotential, electrostaticsSolver.get());
     couplingManager.registerField(FieldKind::Temperature, heatTransferSolver.get());
     couplingManager.registerField(FieldKind::Displacement, solidMechanicsSolver.get());
-
-    // Set coupling configuration from problem model, with fallback to function parameters
-    CouplingConfig couplingConfig = problemModel.couplingConfig;
-    if (maxIterations > 0) {
-        couplingConfig.maxIterations = maxIterations;
-    }
-    if (tolerance > 0) {
-        couplingConfig.tolerance = tolerance;
-    }
-    couplingManager.setCouplingConfig(couplingConfig);
+    couplingManager.setCouplingConfig(problemModel.couplingConfig);
 
     // Setup coupling
     couplingManager.setupCoupling();

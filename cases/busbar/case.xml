@@ -38,7 +38,7 @@
   </physics>
 
   <physics kind="solid_mechanics" order="1">
-    <solver type="cg_gs" max_iter="8000" tolerance="1e-10" print_level="0"/>
+    <solver type="hypre_boomeramg" max_iter="500" tolerance="1e-10" print_level="0"/>
     <boundary kind="fixed_constraint" ids="8,15,43" value="0[m]" />
     <boundary kind="free_boundary" ids="1-7,9-14,16-42" />
   </physics>
@@ -46,5 +46,5 @@
   <coupledPhysics name="joule_heat" kind="joule_heating" physics="electrostatics,heat_transfer" domains="1-7" />
   <coupledPhysics name="thermal_expansion" kind="thermal_expansion" physics="heat_transfer,solid_mechanics" domains="1-7" />
 
-  <coupling method="picard" max_iter="50" tolerance="1e-8"/>
+  <coupling method="picard" max_iter="20" tolerance="1e-7"/>
 </case>

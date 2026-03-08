@@ -20,10 +20,8 @@ public:
     /**
      * @brief Runs segregated coupling using MFEM weak-form assembly.
      * @param mesh Loaded MFEM mesh.
-     * @param problemModel Generic problem model.
+     * @param problemModel Generic problem model (includes coupling config).
      * @param materials Reduced material property model.
-     * @param maxIterations Coupling iteration cap.
-     * @param tolerance Convergence threshold for field updates.
      * @param result Output sampled field results.
      * @param errorMessage Error details on failure.
      * @return True when solve succeeds.
@@ -31,8 +29,6 @@ public:
     bool solve(mfem::Mesh &mesh,
                const PhysicsProblemModel &problemModel,
                const PhysicsMaterialDatabase &materials,
-               int maxIterations,
-               double tolerance,
                CoupledFieldResult &result,
                std::string &errorMessage) const;
 };
