@@ -8,7 +8,7 @@ namespace mpfem {
 namespace {
 
 const double MIN_RESISTIVITY = 1e-16;
-const double DEFAULT_REFERENCE_TEMPERATURE = 293.15;
+const double DEFAULT_REFERENCE_TEMPERATURE = 298;
 
 /**
  * @brief Conductivity coefficient that supports temperature dependence.

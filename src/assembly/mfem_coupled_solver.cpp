@@ -12,8 +12,6 @@ namespace mpfem {
 
 namespace {
 
-const double DEFAULT_REFERENCE_TEMPERATURE = 293.15;
-
 bool recoverVertexSample(const mfem::Mesh& mesh,
                          const mfem::GridFunction& potential,
                          const mfem::GridFunction& temperature,
