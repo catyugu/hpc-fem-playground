@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(HPC_FEM_PLAYGROUND VERSION 0.1.0 LANGUAGES CXX)
+project(MPFEM VERSION 0.1.0 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -46,12 +46,6 @@ set(MFEM_ENABLE_TESTING  OFF CACHE BOOL "Disable building MFEM tests" FORCE)
 
 add_subdirectory(${MFEM_INCLUDE_DIR})
 
-# Build the hpcfem library
+# Build the mpfem library
 add_subdirectory(src)
-
-# Enable testing
-enable_testing()
-add_subdirectory(tests)
-
 add_subdirectory(example)
-add_subdirectory(benchmark)
