@@ -286,7 +286,12 @@ def reorder_hex_from_geometry(vertices, all_nodes):
             neighbors[i].add(j)
             neighbors[j].add(i)
 
-    base = min(range(8), key=lambda index: sum(local_points[index]))
+    # Use deterministic sorting: coordinate sum as primary, index as secondary
+    def sort_key(index):
+        pt = local_points[index]
+        return (sum(pt), index)
+
+    base = min(range(8), key=sort_key)
     base_neighbors = list(neighbors[base])
     if len(base_neighbors) != 3:
         return vertices
@@ -311,7 +316,7 @@ def reorder_hex_from_geometry(vertices, all_nodes):
         candidates = (neighbors[i].intersection(neighbors[j])) - set(excluded)
         if not candidates:
             return None
-        return next(iter(candidates))
+        return min(candidates)  # Deterministic selection
 
     v2 = common_neighbor(v1, v3, [base, v4])
     if v2 is None:
@@ -326,7 +331,7 @@ def reorder_hex_from_geometry(vertices, all_nodes):
     v6_candidates = (neighbors[v2].intersection(neighbors[v5]).intersection(neighbors[v7])) - {base, v1, v2, v3, v4, v5, v7}
     if not v6_candidates:
         return vertices
-    v6 = next(iter(v6_candidates))
+    v6 = min(v6_candidates)  # Deterministic selection
 
     local_order = [base, v1, v2, v3, v4, v5, v6, v7]
     if len(set(local_order)) != 8:
@@ -402,6 +407,7 @@ def reorder_pyramid_from_geometry(vertices, all_nodes):
     if vector_norm(axis_v) < tolerance:
         return vertices
 
+    # Use deterministic sorting: include original index as tiebreaker
     base_angles = []
     for index in base:
         direction = vector_sub(local_points[index], base_center)

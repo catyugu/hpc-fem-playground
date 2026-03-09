@@ -24,21 +24,21 @@
   </materials>
 
   <physics kind="electrostatics" order="1">
-    <solver type="cg" max_iter="1000" tolerance="1e-10" print_level="0"/>
+    <solver type="cg_gs" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <boundary kind="voltage" ids="43" value="Vtot" />
     <boundary kind="voltage" ids="8,15" value="0[V]" />
     <boundary kind="electric_insulation" ids="1-7,9-14,16-42" />
   </physics>
 
   <physics kind="heat_transfer" order="1">
-    <solver type="cg" max_iter="1000" tolerance="1e-10" print_level="0"/>
+    <solver type="cg_gs" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <boundary kind="convection" ids="1-7,9-14,16-42" value="htc" aux="293.15[K]" />
     <boundary kind="thermal_insulation" ids="8,15,43" />
     <source kind="volumetric_heat_source" domains="1-7" value="joule_heating" />
   </physics>
 
   <physics kind="solid_mechanics" order="1">
-    <solver type="cg" max_iter="1000" tolerance="1e-10" print_level="0"/>
+    <solver type="cg_gs" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <boundary kind="fixed_constraint" ids="8,15,43" value="0[m]" />
     <boundary kind="free_boundary" ids="1-7,9-14,16-42" />
   </physics>
