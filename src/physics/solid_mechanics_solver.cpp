@@ -51,7 +51,6 @@ public:
         , lambda_(nullptr)
         , mu_(nullptr)
         , referenceTemperature_(DEFAULT_REFERENCE_TEMPERATURE)
-        , loadVector_()
     {}
 
     void setTemperatureField(const FemGridFunction* temperature)
@@ -101,12 +100,12 @@ public:
         const double thermalModulus = (3.0 * lambdaValue + 2.0 * muValue) 
                                      * alphaValue * deltaTemperature;
 
-        loadVector_.SetSize(dimension_ * dimension_);
-        loadVector_ = 0.0;
+        mfem::Vector loadVector(dimension_ * dimension_);
+        loadVector = 0.0;
         for (int i = 0; i < dimension_; ++i) {
-            loadVector_(i * dimension_ + i) = thermalModulus;
+            loadVector(i * dimension_ + i) = thermalModulus;
         }
-        vector = loadVector_;
+        vector = loadVector;
     }
 
 private:
@@ -116,7 +115,6 @@ private:
     mfem::Coefficient* lambda_;
     mfem::Coefficient* mu_;
     double referenceTemperature_;
-    mutable mfem::Vector loadVector_;
 };
 
 } // namespace
@@ -339,6 +337,7 @@ void SolidMechanicsSolver::solve()
                                     *impl_->displacement_,
                                     *impl_->bForm_,
                                     A, x, b);
+    x = 0.0;
     
     mfem::HypreParMatrix* mat = A.As<mfem::HypreParMatrix>();
     impl_->solver_->solve(*mat, x, b);
@@ -352,6 +351,7 @@ void SolidMechanicsSolver::solve()
                                     *impl_->displacement_,
                                     *impl_->bForm_,
                                     mat, x, b);
+    x = 0.0;
 
     impl_->solver_->solve(mat, x, b);
 

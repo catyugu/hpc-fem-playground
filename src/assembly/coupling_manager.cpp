@@ -77,10 +77,25 @@ bool CouplingManager::Impl::checkConvergence()
             norm += current(i) * current(i);
         }
 
+#ifdef MFEM_USE_MPI
+        double globalDiff = 0.0;
+        double globalNorm = 0.0;
+        MPI_Allreduce(&diff, &globalDiff, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&norm, &globalNorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        diff = globalDiff;
+        norm = globalNorm;
+#endif
+
         const double relDiff = (norm > 0.0) ? std::sqrt(diff / norm) : 0.0;
         maxRelDiff = std::max(maxRelDiff, relDiff);
         ++index;
     }
+
+#ifdef MFEM_USE_MPI
+    double globalMaxRelDiff = 0.0;
+    MPI_Allreduce(&maxRelDiff, &globalMaxRelDiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    maxRelDiff = globalMaxRelDiff;
+#endif
 
     Logger::log(LogLevel::Debug, "Convergence check: max relative diff = " 
                + std::to_string(maxRelDiff));

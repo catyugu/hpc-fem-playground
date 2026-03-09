@@ -231,6 +231,7 @@ void ElectrostaticsSolver::solve()
                                     *impl_->potential_, 
                                     *impl_->bForm_, 
                                     A, x, b);
+    x = 0.0;
     
     // Get the HypreParMatrix from the operator handle
     mfem::HypreParMatrix* mat = A.As<mfem::HypreParMatrix>();
@@ -245,6 +246,7 @@ void ElectrostaticsSolver::solve()
                                     *impl_->potential_, 
                                     *impl_->bForm_, 
                                     mat, x, b);
+    x = 0.0;
 
     impl_->solver_->solve(mat, x, b);
 

@@ -23,14 +23,14 @@
     <assign domains="2-7" material="mat2" />
   </materials>
 
-  <physics kind="electrostatics" order="1">
+  <physics kind="electrostatics" order="2">
     <solver type="hypre_amg" max_iter="500" tolerance="1e-12" print_level="0"/>
     <boundary kind="voltage" ids="43" value="Vtot" />
     <boundary kind="voltage" ids="8,15" value="0[V]" />
     <boundary kind="electric_insulation" ids="1-7,9-14,16-42" />
   </physics>
 
-  <physics kind="heat_transfer" order="1">
+  <physics kind="heat_transfer" order="2">
     <solver type="hypre_amg" max_iter="500" tolerance="1e-12" print_level="0"/>
     <boundary kind="convection" ids="1-7,9-14,16-42" value="htc" aux="293.15[K]" />
     <boundary kind="thermal_insulation" ids="8,15,43" />

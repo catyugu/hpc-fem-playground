@@ -45,7 +45,7 @@ private:
 class JouleHeatCoefficient : public mfem::Coefficient {
 public:
     JouleHeatCoefficient()
-        : potential_(nullptr), conductivity_(nullptr), gradient_() {}
+        : potential_(nullptr), conductivity_(nullptr) {}
 
     void setPotential(const FemGridFunction* potential)
     {
@@ -65,16 +65,16 @@ public:
         }
 
         transformation.SetIntPoint(&integrationPoint);
-        potential_->GetGradient(transformation, gradient_);
+        mfem::Vector gradient;
+        potential_->GetGradient(transformation, gradient);
         const double sigma = conductivity_->Eval(transformation, integrationPoint);
-        const double norm2 = gradient_ * gradient_;
+        const double norm2 = gradient * gradient;
         return sigma * norm2;
     }
 
 private:
     const FemGridFunction* potential_;
     mfem::Coefficient* conductivity_;
-    mutable mfem::Vector gradient_;
 };
 
 } // namespace
@@ -289,6 +289,7 @@ void HeatTransferSolver::solve()
                                     *impl_->temperature_,
                                     *impl_->bForm_,
                                     A, x, b);
+    x = 0.0;
     
     mfem::HypreParMatrix* mat = A.As<mfem::HypreParMatrix>();
     impl_->solver_->solve(*mat, x, b);
@@ -302,6 +303,7 @@ void HeatTransferSolver::solve()
                                     *impl_->temperature_,
                                     *impl_->bForm_,
                                     mat, x, b);
+    x = 0.0;
 
     impl_->solver_->solve(mat, x, b);
 
