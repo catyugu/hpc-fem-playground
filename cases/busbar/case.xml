@@ -25,21 +25,48 @@
 
   <physics kind="electrostatics" order="1">
     <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
-    <boundary kind="voltage" ids="43" value="Vtot" />
-    <boundary kind="voltage" ids="8,15" value="0[V]" />
+    <!-- Split voltage boundaries to test new structure -->
+    <boundary kind="voltage" ids="43">
+      <param name="value" value="Vtot"/>
+    </boundary>
+    <boundary kind="voltage" ids="8">
+      <param name="value" value="0[V]"/>
+    </boundary>
+    <boundary kind="voltage" ids="15">
+      <param name="value" value="0[V]"/>
+    </boundary>
     <boundary kind="electric_insulation" ids="1-7,9-14,16-42" />
   </physics>
 
   <physics kind="heat_transfer" order="1">
     <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
-    <boundary kind="convection" ids="1-7,9-14,16-42" value="htc" aux="293.15[K]" />
+    <!-- Split convection into multiple groups to test new structure -->
+    <boundary kind="convection" ids="1-7">
+      <param name="h" value="htc"/>
+      <param name="T_inf" value="293.15[K]"/>
+    </boundary>
+    <boundary kind="convection" ids="9-14">
+      <param name="h" value="htc"/>
+      <param name="T_inf" value="293.15[K]"/>
+    </boundary>
+    <boundary kind="convection" ids="16-28">
+      <param name="h" value="htc"/>
+      <param name="T_inf" value="293.15[K]"/>
+    </boundary>
+    <boundary kind="convection" ids="29-42">
+      <param name="h" value="htc"/>
+      <param name="T_inf" value="293.15[K]"/>
+    </boundary>
     <boundary kind="thermal_insulation" ids="8,15,43" />
     <source kind="volumetric_heat_source" domains="1-7" value="joule_heating" />
   </physics>
 
   <physics kind="solid_mechanics" order="1">
     <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
-    <boundary kind="fixed_constraint" ids="8,15,43" value="0[m]" />
+    <!-- Split fixed constraints to test new structure -->
+    <boundary kind="fixed_constraint" ids="8" />
+    <boundary kind="fixed_constraint" ids="15" />
+    <boundary kind="fixed_constraint" ids="43" />
     <boundary kind="free_boundary" ids="1-7,9-14,16-42" />
   </physics>
 

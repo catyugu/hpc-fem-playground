@@ -17,27 +17,25 @@ enum class FieldKind {
     Displacement
 };
 
-enum class BoundaryConditionKind {
-    Dirichlet,
-    Insulation,
-    Convection,
-    Fixed,
-    Free
-};
-
 enum class CouplingKind {
     JouleHeating,
     ThermalExpansion,
     Unknown
 };
 
-struct FieldBoundaryCondition {
-    FieldKind field = FieldKind::ElectricPotential;
-    BoundaryConditionKind kind = BoundaryConditionKind::Insulation;
-    std::set<int> boundaryIds;
-    double value = 0.0;
-    double auxiliary = 0.0;
+/**
+ * @brief Boundary condition parameters (resolved to numeric values).
+ * 
+ * Stores the kind of boundary condition and its resolved parameter values.
+ * Each boundary id maps to one BoundaryParams instance.
+ */
+struct BoundaryParams {
+    std::string kind;
+    std::map<std::string, double> values;
 };
+
+/// Boundary conditions organized by boundary id for each physics field
+using BoundaryConditions = std::map<int, BoundaryParams>;
 
 struct FieldSource {
     FieldKind field = FieldKind::Temperature;
@@ -59,7 +57,7 @@ struct PhysicsProblemModel {
     std::string comsolResultPath;
     std::map<std::string, double> variables;
     std::map<int, std::string> domainMaterialTag;
-    std::vector<FieldBoundaryCondition> boundaries;
+    std::map<FieldKind, BoundaryConditions> boundaries;  // field -> id -> params
     std::vector<FieldSource> sources;
     std::vector<CouplingKind> couplings;
     std::map<FieldKind, FieldConfig> fieldConfigs;

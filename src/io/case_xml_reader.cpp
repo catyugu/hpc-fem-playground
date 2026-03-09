@@ -1,4 +1,5 @@
 #include "case_xml_reader.hpp"
+#include "boundary_spec.hpp"
 #include "id_range_parser.hpp"
 #include "value_parser.hpp"
 #include "logger.hpp"
@@ -145,13 +146,19 @@ void CaseXmlReader::readFromFile(const std::string &filePath, CaseDefinition &ca
             if (boundaryElement->Attribute("kind") != nullptr) {
                 boundary.kind = boundaryElement->Attribute("kind");
             }
-            if (boundaryElement->Attribute("value") != nullptr) {
-                boundary.valueText = boundaryElement->Attribute("value");
-            }
-            if (boundaryElement->Attribute("aux") != nullptr) {
-                boundary.auxText = boundaryElement->Attribute("aux");
-            }
             parseIdAttribute(boundaryElement->Attribute("ids"), boundary.ids);
+            
+            // Parse parameters from child <param> elements
+            const tinyxml2::XMLElement *paramElement = boundaryElement->FirstChildElement("param");
+            while (paramElement != nullptr) {
+                const char* nameAttr = paramElement->Attribute("name");
+                const char* valueAttr = paramElement->Attribute("value");
+                if (nameAttr != nullptr && valueAttr != nullptr) {
+                    boundary.params[nameAttr] = valueAttr;
+                }
+                paramElement = paramElement->NextSiblingElement("param");
+            }
+            
             physics.boundaries.push_back(boundary);
             boundaryElement = boundaryElement->NextSiblingElement("boundary");
         }

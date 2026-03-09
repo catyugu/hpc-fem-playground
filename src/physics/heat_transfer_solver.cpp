@@ -168,19 +168,23 @@ void HeatTransferSolver::Impl::buildConvectionBoundaryMarkers()
     convectionTinf_.SetSize(maxBdrAttr);
     convectionTinf_ = DEFAULT_REFERENCE_TEMPERATURE;
 
-    for (const auto& bc : problemModel_->boundaries) {
-        if (bc.field != FieldKind::Temperature) {
-            continue;
-        }
-        if (bc.kind != BoundaryConditionKind::Convection) {
-            continue;
-        }
+    // Get boundary conditions for this field
+    auto fieldIt = problemModel_->boundaries.find(FieldKind::Temperature);
+    if (fieldIt == problemModel_->boundaries.end()) {
+        return;
+    }
 
-        for (int id : bc.boundaryIds) {
+    const BoundaryConditions& bcMap = fieldIt->second;
+    for (const auto& [id, params] : bcMap) {
+        // Handle convection boundary condition
+        if (params.kind == "convection") {
             if (id > 0 && id <= maxBdrAttr) {
                 convectionBdr_[id - 1] = 1;
-                convectionH_(id - 1) = bc.value;
-                convectionTinf_(id - 1) = bc.auxiliary;
+                auto hIt = params.values.find("h");
+                auto tinfIt = params.values.find("T_inf");
+                convectionH_(id - 1) = (hIt != params.values.end()) ? hIt->second : 0.0;
+                convectionTinf_(id - 1) = (tinfIt != params.values.end()) 
+                    ? tinfIt->second : DEFAULT_REFERENCE_TEMPERATURE;
             }
         }
     }
