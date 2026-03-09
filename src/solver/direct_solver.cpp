@@ -30,10 +30,9 @@ void DirectSolver::solve(mfem::SparseMatrix& matrix,
               std::to_string(i) + " (value: " + std::to_string(rhs(i)) + ")");
     }
 
-    // Try to use direct solver first
+    // Use direct solver
     // Note: MFEM's direct solver availability depends on build configuration
 #ifdef MFEM_USE_SUITESPARSE
-    // Use UMFPack if available
     mfem::UMFPackSolver umfSolver;
     umfSolver.Control[UMFPACK_ORDERING] = UMFPACK_ORDERING_BEST;
     umfSolver.SetOperator(matrix);
@@ -41,61 +40,8 @@ void DirectSolver::solve(mfem::SparseMatrix& matrix,
     numIterations_ = 1;
     finalResidual_ = 0.0;
 #else
-    // Fallback to iterative solver with diagonal scaling
-    // Scale the system for better conditioning
-    mfem::Vector diag(matrix.Size());
-    matrix.GetDiag(diag);
-    
-    // Check for zeros on diagonal
-    for (int i = 0; i < diag.Size(); ++i) {
-        Check(std::abs(diag(i)) > 1e-15,
-              "DirectSolver: Zero on diagonal at index " + std::to_string(i));
-    }
-    
-    // Use MINRES with diagonal preconditioner
-    mfem::Vector scaledRhs(rhs.Size());
-    mfem::Vector scaledSol(solution.Size());
-    
-    for (int i = 0; i < rhs.Size(); ++i) {
-        scaledRhs(i) = rhs(i) / std::sqrt(std::abs(diag(i)));
-    }
-    
-    // Use simple iterative refinement
-    solution = 0.0;
-    mfem::Vector residual(rhs.Size());
-    mfem::Vector correction(rhs.Size());
-    
-    mfem::GSSmoother gs(matrix);
-    
-    for (int iter = 0; iter < maxIterations_; ++iter) {
-        // Compute residual: r = b - A*x
-        matrix.Mult(solution, residual);
-        for (int i = 0; i < rhs.Size(); ++i) {
-            residual(i) = rhs(i) - residual(i);
-        }
-        
-        double resNorm = residual.Norml2();
-        if (iter == 0) {
-            finalResidual_ = resNorm;
-        }
-        
-        if (resNorm < relativeTolerance_ * finalResidual_ || resNorm < absoluteTolerance_) {
-            numIterations_ = iter + 1;
-            finalResidual_ = resNorm;
-            break;
-        }
-        
-        // Solve for correction using Gauss-Seidel
-        correction = 0.0;
-        gs.Mult(residual, correction);
-        
-        // Update solution
-        for (int i = 0; i < solution.Size(); ++i) {
-            solution(i) += correction(i);
-        }
-        
-        numIterations_ = iter + 1;
-        finalResidual_ = resNorm;
+    Logger::log(LogLevel::Error, "Direct solver requested but UMFPACK is not available. Aborting.");
+    std::exit(1);
     }
 #endif
 
