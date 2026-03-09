@@ -46,5 +46,5 @@
   <coupledPhysics name="joule_heat" kind="joule_heating" physics="electrostatics,heat_transfer" domains="1-7" />
   <coupledPhysics name="thermal_expansion" kind="thermal_expansion" physics="heat_transfer,solid_mechanics" domains="1-7" />
 
-  <coupling method="picard" max_iter="20" tolerance="1e-7"/>
+  <coupling method="picard" max_iter="20" tolerance="1e-8"/>
 </case>
