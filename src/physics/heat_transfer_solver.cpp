@@ -4,7 +4,6 @@
 #include "logger.hpp"
 
 #include <cmath>
-#include <set>
 
 namespace mpfem {
 
@@ -60,15 +59,30 @@ public:
     double Eval(mfem::ElementTransformation& transformation,
                 const mfem::IntegrationPoint& integrationPoint) override
     {
-        if (potential_ == nullptr || conductivity_ == nullptr) {
-            return 0.0;
-        }
+        Check(potential_ != nullptr, "JouleHeatCoefficient: potential field is null");
+        Check(conductivity_ != nullptr, "JouleHeatCoefficient: conductivity coefficient is null");
 
         transformation.SetIntPoint(&integrationPoint);
         mfem::Vector gradient;
         potential_->GetGradient(transformation, gradient);
+
+        // Validate gradient components
+        for (int i = 0; i < gradient.Size(); ++i) {
+            Check(std::isfinite(gradient(i)),
+                  "JouleHeatCoefficient: gradient component " + std::to_string(i) +
+                  " is not finite (value: " + std::to_string(gradient(i)) + ")");
+        }
+
         const double sigma = conductivity_->Eval(transformation, integrationPoint);
+        Check(std::isfinite(sigma),
+              "JouleHeatCoefficient: conductivity is not finite (value: " +
+              std::to_string(sigma) + ")");
+
         const double norm2 = gradient * gradient;
+        Check(std::isfinite(norm2),
+              "JouleHeatCoefficient: gradient norm squared is not finite (value: " +
+              std::to_string(norm2) + ")");
+
         return sigma * norm2;
     }
 
@@ -99,7 +113,6 @@ public:
     // Joule heating source
     std::unique_ptr<JouleHeatCoefficient> jouleHeatSource_;
     bool hasJouleHeating_ = false;
-    std::set<int> jouleHeatingDomains_;
 
     std::unique_ptr<mfem::BilinearForm> aForm_;
     std::unique_ptr<mfem::LinearForm> bForm_;
@@ -166,7 +179,6 @@ void HeatTransferSolver::Impl::buildConvectionBoundaryMarkers()
 void HeatTransferSolver::Impl::parseSourceTerms()
 {
     hasJouleHeating_ = false;
-    jouleHeatingDomains_.clear();
 
     for (const auto& source : problemModel_->sources) {
         if (source.field != FieldKind::Temperature) {
@@ -174,9 +186,7 @@ void HeatTransferSolver::Impl::parseSourceTerms()
         }
         if (source.coupled && source.couplingKind == CouplingKind::JouleHeating) {
             hasJouleHeating_ = true;
-            for (int domain : source.domainIds) {
-                jouleHeatingDomains_.insert(domain);
-            }
+            break;
         }
     }
 }

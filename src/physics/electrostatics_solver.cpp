@@ -46,21 +46,31 @@ public:
 
         const double rho0 = rho0_(attribute - 1);
         if (rho0 > 0.0) {
+            // Use linear resistivity model: rho = rho0 * (1 + alpha * (T - Tref))
             const double alpha = alpha_(attribute - 1);
             const double tref = tref_(attribute - 1);
             double temperatureValue = tref;
             if (temperature_ != nullptr) {
                 temperatureValue = temperature_->GetValue(transformation, integrationPoint);
+                Check(std::isfinite(temperatureValue),
+                      "ConductivityCoefficient: temperature is not finite (value: " +
+                      std::to_string(temperatureValue) + ")");
             }
             const double rho = rho0 * (1.0 + alpha * (temperatureValue - tref));
-            if (std::abs(rho) > MIN_RESISTIVITY) {
-                return 1.0 / rho;
-            }
-            return 1.0 / MIN_RESISTIVITY;
+            Check(std::isfinite(rho) && rho > 0.0,
+                  "ConductivityCoefficient: resistivity is invalid (rho0=" +
+                  std::to_string(rho0) + ", alpha=" + std::to_string(alpha) +
+                  ", T=" + std::to_string(temperatureValue) + ", tref=" +
+                  std::to_string(tref) + ", rho=" + std::to_string(rho) + ")");
+            return 1.0 / rho;
         }
 
+        // Use constant conductivity
         const double sigma = sigma0_(attribute - 1);
-        return sigma > 0.0 ? sigma : 1.0;
+        Check(std::isfinite(sigma) && sigma > 0.0,
+              "ConductivityCoefficient: conductivity is invalid (value: " +
+              std::to_string(sigma) + ")");
+        return sigma;
     }
 
 private:

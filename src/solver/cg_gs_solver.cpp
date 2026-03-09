@@ -2,6 +2,8 @@
 #include "mfem.hpp"
 #include "logger.hpp"
 
+#include <cmath>
+
 namespace mpfem {
 
 CGGSSolver::CGGSSolver()
@@ -20,6 +22,13 @@ void CGGSSolver::solve(mfem::SparseMatrix& matrix,
 {
     numIterations_ = 0;
     finalResidual_ = 0.0;
+
+    // Validate RHS vector
+    for (int i = 0; i < rhs.Size(); ++i) {
+        Check(std::isfinite(rhs(i)),
+              "CGGSSolver: RHS vector contains non-finite value at index " +
+              std::to_string(i) + " (value: " + std::to_string(rhs(i)) + ")");
+    }
 
     // Serial version with CG + Gauss-Seidel
     mfem::GSSmoother preconditioner(matrix);

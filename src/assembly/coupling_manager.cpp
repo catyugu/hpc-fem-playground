@@ -114,13 +114,18 @@ void CouplingManager::Impl::runNewtonRaphson()
         auto heatIter = solvers_.find(FieldKind::Temperature);
         if (heatIter != solvers_.end()) {
             auto* heatSolver = dynamic_cast<HeatTransferSolver*>(heatIter->second);
+            Check(heatSolver != nullptr, "Failed to cast Temperature solver to HeatTransferSolver");
 
             // Update potential field and conductivity for Joule heating
-            if (electroIter != solvers_.end() && heatSolver) {
+            if (electroIter != solvers_.end()) {
+                auto* electroSolver = dynamic_cast<ElectrostaticsSolver*>(electroIter->second);
+                Check(electroSolver != nullptr, "Failed to cast ElectricPotential solver to ElectrostaticsSolver");
+                
+                mfem::Coefficient* condCoef = electroSolver->getConductivityCoefficient();
+                Check(condCoef != nullptr, "Conductivity coefficient is null");
+                
                 heatSolver->setPotentialField(&electroIter->second->getField());
-                heatSolver->setConductivityCoefficient(
-                    dynamic_cast<ElectrostaticsSolver*>(electroIter->second)
-                        ->getConductivityCoefficient());
+                heatSolver->setConductivityCoefficient(condCoef);
             }
 
             solveField(heatIter->second, "Heat transfer solve");
