@@ -56,16 +56,16 @@ int main(int argc, char *argv[])
     }
 
     // ========== Step 5: Load mesh ==========
-    mfem::Mesh mesh;
+    std::unique_ptr<mfem::Mesh> meshPtr;
     {
         ScopedTimer timer("Mesh loading");
 
-        std::filesystem::path MeshPath = meshPath;
+        std::filesystem::path meshFilePath = meshPath;
         if (meshPath.extension() == ".mphtxt")
         {
-            MeshPath.replace_extension(".mesh");
+            meshFilePath.replace_extension(".mesh");
 
-            const std::string cmd = "python3 scripts/mphtxt_to_mfem_mesh.py " + meshPath.string() + " " + MeshPath.string();
+            const std::string cmd = "python3 scripts/mphtxt_to_mfem_mesh.py " + meshPath.string() + " " + meshFilePath.string();
             if (std::system(cmd.c_str()) != 0)
             {
                 Logger::log(LogLevel::Error, "Failed to convert mphtxt mesh");
@@ -73,13 +73,13 @@ int main(int argc, char *argv[])
             }
         }
 
-        auto mesh = std::make_unique<mfem::Mesh>(MeshPath.string().c_str(), 1, 1, true);
+        meshPtr = std::make_unique<mfem::Mesh>(meshFilePath.string().c_str(), 1, 1, true);
     }
 
     // ========== Step 6: Run coupled solver ==========
     MfemCoupledSolver solver;
     CoupledFieldResult result;
-    solver.solve(mesh, problemModel, materialDatabase, result);
+    solver.solve(*meshPtr, problemModel, materialDatabase, result);
 
     // ========== Step 7: Export results ==========
     std::filesystem::path comsolOutput;
