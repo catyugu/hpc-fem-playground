@@ -1,7 +1,7 @@
 #ifndef MPFEM_LINEAR_SOLVER_STRATEGY_HPP
 #define MPFEM_LINEAR_SOLVER_STRATEGY_HPP
 
-#include "mpfem_types.hpp"
+#include "mpfem.hpp"
 
 #include <memory>
 
@@ -19,9 +19,9 @@ public:
     /**
      * @brief Solve the linear system A x = b.
      */
-    virtual void solve(FemMatrix& matrix,
-                       FemVector& solution,
-                       FemVector& rhs) = 0;
+    virtual void solve(mfem::SparseMatrix& matrix,
+                       mfem::Vector& solution,
+                       mfem::Vector& rhs) = 0;
 
     virtual void setMaxIterations(int maxIterations) = 0;
     virtual void setRelativeTolerance(double tolerance) = 0;

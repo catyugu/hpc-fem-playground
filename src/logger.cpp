@@ -3,10 +3,6 @@
 #include <iomanip>
 #include <iostream>
 
-#ifdef MFEM_USE_MPI
-#include <mpi.h>
-#endif
-
 namespace mpfem {
 
 std::mutex Logger::mutex_;
@@ -26,34 +22,6 @@ void Logger::log(LogLevel level, const std::string &message)
     if (level < minimumLevel_) {
         return;
     }
-
-    const char* ompiRank = std::getenv("OMPI_COMM_WORLD_RANK");
-    if (ompiRank != nullptr && std::atoi(ompiRank) != 0) {
-        return;
-    }
-
-    const char* pmiRank = std::getenv("PMI_RANK");
-    if (pmiRank != nullptr && std::atoi(pmiRank) != 0) {
-        return;
-    }
-
-#ifdef MFEM_USE_MPI
-    int isInitialized = 0;
-    MPI_Initialized(&isInitialized);
-    if (isInitialized != 0) {
-        int isFinalized = 0;
-        MPI_Finalized(&isFinalized);
-        if (isFinalized != 0) {
-            return;
-        }
-
-        int rank = 0;
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        if (rank != 0) {
-            return;
-        }
-    }
-#endif
 
     const char* levelStr = "";
     switch (level) {

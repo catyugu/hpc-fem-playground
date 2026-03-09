@@ -1,5 +1,5 @@
 #include "cg_gs_solver.hpp"
-#include "mpfem_types.hpp"
+#include "mfem.hpp"
 #include "logger.hpp"
 
 namespace mpfem {
@@ -14,38 +14,13 @@ CGGSSolver::CGGSSolver()
 {
 }
 
-void CGGSSolver::solve(FemMatrix& matrix,
-                       FemVector& solution,
-                       FemVector& rhs)
+void CGGSSolver::solve(mfem::SparseMatrix& matrix,
+                       mfem::Vector& solution,
+                       mfem::Vector& rhs)
 {
     numIterations_ = 0;
     finalResidual_ = 0.0;
 
-#ifdef MFEM_USE_MPI
-    // Parallel version with HYPRE AMG preconditioner
-    mfem::HypreParMatrix* hypreMat = dynamic_cast<mfem::HypreParMatrix*>(&matrix);
-    Check(hypreMat != nullptr, "Matrix must be HypreParMatrix for parallel solver");
-
-    mfem::HypreBoomerAMG amg(*hypreMat);
-    amg.SetPrintLevel(printLevel_);
-
-    // Use MFEM's CGSolver which works with any Operator
-    mfem::CGSolver cg(hypreMat->GetComm());
-    cg.SetOperator(*hypreMat);
-    cg.SetPreconditioner(amg);
-    cg.SetMaxIter(maxIterations_);
-    cg.SetRelTol(relativeTolerance_);
-    cg.SetAbsTol(absoluteTolerance_);
-    cg.SetPrintLevel(printLevel_);
-    cg.Mult(rhs, solution);
-
-    numIterations_ = cg.GetNumIterations();
-    finalResidual_ = cg.GetFinalNorm();
-
-    Check(cg.GetConverged(), 
-          "CG solver did not converge after " + std::to_string(numIterations_) 
-          + " iterations. Final residual: " + std::to_string(finalResidual_));
-#else
     // Serial version with CG + Gauss-Seidel
     mfem::GSSmoother preconditioner(matrix);
     mfem::CGSolver cgSolver;
@@ -63,7 +38,6 @@ void CGGSSolver::solve(FemMatrix& matrix,
     Check(cgSolver.GetConverged(), 
           "CG solver did not converge after " + std::to_string(numIterations_) 
           + " iterations. Final residual: " + std::to_string(finalResidual_));
-#endif
 }
 
 void CGGSSolver::setMaxIterations(int maxIterations)

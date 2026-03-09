@@ -1,7 +1,7 @@
 #ifndef MPFEM_MPFEM_HPP
 #define MPFEM_MPFEM_HPP
 
-#include "mpfem_types.hpp"
+#include "mfem.hpp"
 #include "io/case_xml_reader.hpp"
 #include "io/material_xml_reader.hpp"
 #include "io/comsol_result_reader.hpp"

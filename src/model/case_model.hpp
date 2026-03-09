@@ -55,7 +55,7 @@ struct SourceDefinition {
  * @brief Linear solver configuration.
  */
 struct SolverConfig {
-    std::string type = "cg_gs";  // "cg_gs", "hypre_boomeramg", "hypre_amg", "gmres"
+    std::string type = "cg_gs";  // "cg_gs", "gmres"
     int maxIterations = 1000;
     double relativeTolerance = 1e-10;
     int printLevel = 0;

@@ -21,7 +21,7 @@ public:
     void savePreviousSolutions();
     bool checkConvergence();
 
-    std::vector<FemVector> previousSolutions_;
+    std::vector<mfem::Vector> previousSolutions_;
 };
 
 void CouplingManager::Impl::solveField(PhysicsFieldSolver* solver, const std::string& name)
@@ -49,8 +49,8 @@ void CouplingManager::Impl::savePreviousSolutions()
 {
     previousSolutions_.clear();
     for (const auto& [kind, solver] : solvers_) {
-        const FemGridFunction& field = solver->getField();
-        previousSolutions_.push_back(FemVector(field));
+        const mfem::GridFunction& field = solver->getField();
+        previousSolutions_.push_back(mfem::Vector(field));
     }
 }
 
@@ -64,8 +64,8 @@ bool CouplingManager::Impl::checkConvergence()
     double maxRelDiff = 0.0;
 
     for (const auto& [kind, solver] : solvers_) {
-        const FemGridFunction& current = solver->getField();
-        const FemVector& previous = previousSolutions_[index];
+        const mfem::GridFunction& current = solver->getField();
+        const mfem::Vector& previous = previousSolutions_[index];
         
         double diff = 0.0;
         double norm = 0.0;
@@ -77,25 +77,10 @@ bool CouplingManager::Impl::checkConvergence()
             norm += current(i) * current(i);
         }
 
-#ifdef MFEM_USE_MPI
-        double globalDiff = 0.0;
-        double globalNorm = 0.0;
-        MPI_Allreduce(&diff, &globalDiff, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        MPI_Allreduce(&norm, &globalNorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        diff = globalDiff;
-        norm = globalNorm;
-#endif
-
         const double relDiff = (norm > 0.0) ? std::sqrt(diff / norm) : 0.0;
         maxRelDiff = std::max(maxRelDiff, relDiff);
         ++index;
     }
-
-#ifdef MFEM_USE_MPI
-    double globalMaxRelDiff = 0.0;
-    MPI_Allreduce(&maxRelDiff, &globalMaxRelDiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    maxRelDiff = globalMaxRelDiff;
-#endif
 
     Logger::log(LogLevel::Debug, "Convergence check: max relative diff = " 
                + std::to_string(maxRelDiff));
@@ -209,7 +194,7 @@ void CouplingManager::run()
     }
 }
 
-const FemGridFunction* CouplingManager::getField(FieldKind kind) const
+const mfem::GridFunction* CouplingManager::getField(FieldKind kind) const
 {
     auto iter = impl_->solvers_.find(kind);
     if (iter != impl_->solvers_.end()) {

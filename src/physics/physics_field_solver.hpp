@@ -2,7 +2,7 @@
 #define MPFEM_PHYSICS_FIELD_SOLVER_HPP
 
 #include "linear_solver_strategy.hpp"
-#include "mpfem_types.hpp"
+#include "mfem.hpp"
 #include "physics_problem_model.hpp"
 
 #include <memory>
@@ -34,7 +34,7 @@ public:
     /**
      * @brief Initialize the solver with mesh and materials.
      */
-    virtual void initialize(FemMesh& mesh,
+    virtual void initialize(mfem::Mesh& mesh,
                            const PhysicsProblemModel& problemModel,
                            const PhysicsMaterialDatabase& materials) = 0;
 
@@ -56,8 +56,8 @@ public:
     /**
      * @brief Get the field solution as a GridFunction.
      */
-    virtual FemGridFunction& getField() = 0;
-    virtual const FemGridFunction& getField() const = 0;
+    virtual mfem::GridFunction& getField() = 0;
+    virtual const mfem::GridFunction& getField() const = 0;
 
     /**
      * @brief Get the field kind this solver handles.
@@ -67,8 +67,8 @@ public:
     /**
      * @brief Get the finite element space for this field.
      */
-    virtual FemFEspace& getSpace() = 0;
-    virtual const FemFEspace& getSpace() const = 0;
+    virtual mfem::FiniteElementSpace& getSpace() = 0;
+    virtual const mfem::FiniteElementSpace& getSpace() const = 0;
 };
 
 } // namespace mpfem

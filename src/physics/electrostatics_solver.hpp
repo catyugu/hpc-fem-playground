@@ -21,7 +21,7 @@ public:
     void setOrder(int order) override;
     void setSolver(std::unique_ptr<LinearSolverStrategy> solver) override;
 
-    void initialize(FemMesh& mesh,
+    void initialize(mfem::Mesh& mesh,
                    const PhysicsProblemModel& problemModel,
                    const PhysicsMaterialDatabase& materials) override;
 
@@ -29,16 +29,16 @@ public:
     void assemble() override;
     void solve() override;
 
-    FemGridFunction& getField() override;
-    const FemGridFunction& getField() const override;
+    mfem::GridFunction& getField() override;
+    const mfem::GridFunction& getField() const override;
     FieldKind getFieldKind() const override;
-    FemFEspace& getSpace() override;
-    const FemFEspace& getSpace() const override;
+    mfem::FiniteElementSpace& getSpace() override;
+    const mfem::FiniteElementSpace& getSpace() const override;
 
     /**
      * @brief Set the temperature field for temperature-dependent conductivity.
      */
-    void setTemperatureField(const FemGridFunction* temperature);
+    void setTemperatureField(const mfem::GridFunction* temperature);
 
     /**
      * @brief Get the conductivity coefficient (for coupling).

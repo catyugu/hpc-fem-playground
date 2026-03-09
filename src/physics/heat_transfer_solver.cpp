@@ -1,6 +1,6 @@
 #include "heat_transfer_solver.hpp"
 #include "linear_solver_strategy.hpp"
-#include "mpfem_types.hpp"
+#include "mfem.hpp"
 #include "logger.hpp"
 
 #include <cmath>
@@ -47,7 +47,7 @@ public:
     JouleHeatCoefficient()
         : potential_(nullptr), conductivity_(nullptr) {}
 
-    void setPotential(const FemGridFunction* potential)
+    void setPotential(const mfem::GridFunction* potential)
     {
         potential_ = potential;
     }
@@ -73,7 +73,7 @@ public:
     }
 
 private:
-    const FemGridFunction* potential_;
+    const mfem::GridFunction* potential_;
     mfem::Coefficient* conductivity_;
 };
 
@@ -82,10 +82,10 @@ private:
 class HeatTransferSolver::Impl {
 public:
     int order_ = 1;
-    FemMesh* mesh_ = nullptr;
-    std::unique_ptr<FemFECollection> fec_;
-    std::unique_ptr<FemFEspace> space_;
-    std::unique_ptr<FemGridFunction> temperature_;
+    mfem::Mesh* mesh_ = nullptr;
+    std::unique_ptr<mfem::H1_FECollection> fec_;
+    std::unique_ptr<mfem::FiniteElementSpace> space_;
+    std::unique_ptr<mfem::GridFunction> temperature_;
     std::unique_ptr<LinearSolverStrategy> solver_;
 
     std::unique_ptr<AttributeScalarCoefficient> thermalConductivity_;
@@ -101,8 +101,8 @@ public:
     bool hasJouleHeating_ = false;
     std::set<int> jouleHeatingDomains_;
 
-    std::unique_ptr<FemBilinearForm> aForm_;
-    std::unique_ptr<FemLinearForm> bForm_;
+    std::unique_ptr<mfem::BilinearForm> aForm_;
+    std::unique_ptr<mfem::LinearForm> bForm_;
     mfem::Array<int> essTdof_;
 
     const PhysicsProblemModel* problemModel_ = nullptr;
@@ -198,7 +198,7 @@ void HeatTransferSolver::setSolver(std::unique_ptr<LinearSolverStrategy> solver)
     impl_->solver_ = std::move(solver);
 }
 
-void HeatTransferSolver::initialize(FemMesh& mesh,
+void HeatTransferSolver::initialize(mfem::Mesh& mesh,
                                     const PhysicsProblemModel& problemModel,
                                     const PhysicsMaterialDatabase& materials)
 {
@@ -206,11 +206,11 @@ void HeatTransferSolver::initialize(FemMesh& mesh,
     impl_->problemModel_ = &problemModel;
 
     // Create finite element collection and space
-    impl_->fec_ = std::make_unique<FemFECollection>(impl_->order_, mesh.Dimension());
-    impl_->space_ = std::make_unique<FemFEspace>(&mesh, impl_->fec_.get());
+    impl_->fec_ = std::make_unique<mfem::H1_FECollection>(impl_->order_, mesh.Dimension());
+    impl_->space_ = std::make_unique<mfem::FiniteElementSpace>(&mesh, impl_->fec_.get());
 
     // Initialize grid function
-    impl_->temperature_ = std::make_unique<FemGridFunction>(impl_->space_.get());
+    impl_->temperature_ = std::make_unique<mfem::GridFunction>(impl_->space_.get());
     *impl_->temperature_ = DEFAULT_REFERENCE_TEMPERATURE;
 
     // Fill material vectors
@@ -240,7 +240,7 @@ void HeatTransferSolver::applyBoundaryConditions()
 
 void HeatTransferSolver::assemble()
 {
-    impl_->aForm_ = std::make_unique<FemBilinearForm>(impl_->space_.get());
+    impl_->aForm_ = std::make_unique<mfem::BilinearForm>(impl_->space_.get());
     impl_->aForm_->AddDomainIntegrator(
         new mfem::DiffusionIntegrator(*impl_->thermalConductivity_));
 
@@ -254,7 +254,7 @@ void HeatTransferSolver::assemble()
     impl_->aForm_->Assemble();
 
     // Build right-hand side
-    impl_->bForm_ = std::make_unique<FemLinearForm>(impl_->space_.get());
+    impl_->bForm_ = std::make_unique<mfem::LinearForm>(impl_->space_.get());
 
     // Add Joule heating source
     if (impl_->hasJouleHeating_ && impl_->jouleHeatSource_) {
@@ -281,22 +281,6 @@ void HeatTransferSolver::solve()
 {
     Check(impl_->solver_, "No linear solver set for HeatTransferSolver");
 
-#ifdef MFEM_USE_MPI
-    // Parallel version: use OperatorHandle
-    mfem::OperatorHandle A;
-    mfem::Vector x, b;
-    impl_->aForm_->FormLinearSystem(impl_->essTdof_,
-                                    *impl_->temperature_,
-                                    *impl_->bForm_,
-                                    A, x, b);
-    x = 0.0;
-    
-    mfem::HypreParMatrix* mat = A.As<mfem::HypreParMatrix>();
-    impl_->solver_->solve(*mat, x, b);
-
-    impl_->aForm_->RecoverFEMSolution(x, *impl_->bForm_, *impl_->temperature_);
-#else
-    // Serial version
     mfem::SparseMatrix mat;
     mfem::Vector x, b;
     impl_->aForm_->FormLinearSystem(impl_->essTdof_,
@@ -308,15 +292,14 @@ void HeatTransferSolver::solve()
     impl_->solver_->solve(mat, x, b);
 
     impl_->aForm_->RecoverFEMSolution(x, *impl_->bForm_, *impl_->temperature_);
-#endif
 }
 
-FemGridFunction& HeatTransferSolver::getField()
+mfem::GridFunction& HeatTransferSolver::getField()
 {
     return *impl_->temperature_;
 }
 
-const FemGridFunction& HeatTransferSolver::getField() const
+const mfem::GridFunction& HeatTransferSolver::getField() const
 {
     return *impl_->temperature_;
 }
@@ -326,17 +309,17 @@ FieldKind HeatTransferSolver::getFieldKind() const
     return FieldKind::Temperature;
 }
 
-FemFEspace& HeatTransferSolver::getSpace()
+mfem::FiniteElementSpace& HeatTransferSolver::getSpace()
 {
     return *impl_->space_;
 }
 
-const FemFEspace& HeatTransferSolver::getSpace() const
+const mfem::FiniteElementSpace& HeatTransferSolver::getSpace() const
 {
     return *impl_->space_;
 }
 
-void HeatTransferSolver::setPotentialField(const FemGridFunction* potential)
+void HeatTransferSolver::setPotentialField(const mfem::GridFunction* potential)
 {
     if (impl_->jouleHeatSource_) {
         impl_->jouleHeatSource_->setPotential(potential);

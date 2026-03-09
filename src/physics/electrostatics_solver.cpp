@@ -1,6 +1,6 @@
 #include "electrostatics_solver.hpp"
 #include "linear_solver_strategy.hpp"
-#include "mpfem_types.hpp"
+#include "mfem.hpp"
 #include "logger.hpp"
 
 #include <cmath>
@@ -31,7 +31,7 @@ public:
         sigma0_ = sigma0;
     }
 
-    void setTemperatureField(const FemGridFunction* temperature)
+    void setTemperatureField(const mfem::GridFunction* temperature)
     {
         temperature_ = temperature;
     }
@@ -68,7 +68,7 @@ private:
     mfem::Vector alpha_;
     mfem::Vector tref_;
     mfem::Vector sigma0_;
-    const FemGridFunction* temperature_;
+    const mfem::GridFunction* temperature_;
 };
 
 } // namespace
@@ -76,10 +76,10 @@ private:
 class ElectrostaticsSolver::Impl {
 public:
     int order_ = 1;
-    FemMesh* mesh_ = nullptr;
-    std::unique_ptr<FemFECollection> fec_;
-    std::unique_ptr<FemFEspace> space_;
-    std::unique_ptr<FemGridFunction> potential_;
+    mfem::Mesh* mesh_ = nullptr;
+    std::unique_ptr<mfem::H1_FECollection> fec_;
+    std::unique_ptr<mfem::FiniteElementSpace> space_;
+    std::unique_ptr<mfem::GridFunction> potential_;
     std::unique_ptr<LinearSolverStrategy> solver_;
     
     std::unique_ptr<ConductivityCoefficient> conductivity_;
@@ -88,8 +88,8 @@ public:
     mfem::Array<int> essentialBdr_;
     mfem::Vector dirichletValues_;
     
-    std::unique_ptr<FemBilinearForm> aForm_;
-    std::unique_ptr<FemLinearForm> bForm_;
+    std::unique_ptr<mfem::BilinearForm> aForm_;
+    std::unique_ptr<mfem::LinearForm> bForm_;
     mfem::Array<int> essTdof_;
     
     const PhysicsProblemModel* problemModel_ = nullptr;
@@ -173,7 +173,7 @@ void ElectrostaticsSolver::setSolver(std::unique_ptr<LinearSolverStrategy> solve
     impl_->solver_ = std::move(solver);
 }
 
-void ElectrostaticsSolver::initialize(FemMesh& mesh,
+void ElectrostaticsSolver::initialize(mfem::Mesh& mesh,
                                       const PhysicsProblemModel& problemModel,
                                       const PhysicsMaterialDatabase& materials)
 {
@@ -181,11 +181,11 @@ void ElectrostaticsSolver::initialize(FemMesh& mesh,
     impl_->problemModel_ = &problemModel;
 
     // Create finite element collection and space
-    impl_->fec_ = std::make_unique<FemFECollection>(impl_->order_, mesh.Dimension());
-    impl_->space_ = std::make_unique<FemFEspace>(&mesh, impl_->fec_.get());
+    impl_->fec_ = std::make_unique<mfem::H1_FECollection>(impl_->order_, mesh.Dimension());
+    impl_->space_ = std::make_unique<mfem::FiniteElementSpace>(&mesh, impl_->fec_.get());
 
     // Initialize grid function
-    impl_->potential_ = std::make_unique<FemGridFunction>(impl_->space_.get());
+    impl_->potential_ = std::make_unique<mfem::GridFunction>(impl_->space_.get());
     *impl_->potential_ = 0.0;
 
     // Fill material vectors
@@ -208,12 +208,12 @@ void ElectrostaticsSolver::applyBoundaryConditions()
 
 void ElectrostaticsSolver::assemble()
 {
-    impl_->aForm_ = std::make_unique<FemBilinearForm>(impl_->space_.get());
+    impl_->aForm_ = std::make_unique<mfem::BilinearForm>(impl_->space_.get());
     impl_->aForm_->AddDomainIntegrator(
         new mfem::DiffusionIntegrator(*impl_->conductivity_));
     impl_->aForm_->Assemble();
 
-    impl_->bForm_ = std::make_unique<FemLinearForm>(impl_->space_.get());
+    impl_->bForm_ = std::make_unique<mfem::LinearForm>(impl_->space_.get());
     impl_->bForm_->Assemble();
 
     impl_->space_->GetEssentialTrueDofs(impl_->essentialBdr_, impl_->essTdof_);
@@ -223,23 +223,6 @@ void ElectrostaticsSolver::solve()
 {
     Check(impl_->solver_, "No linear solver set for ElectrostaticsSolver");
 
-#ifdef MFEM_USE_MPI
-    // Parallel version: use OperatorHandle
-    mfem::OperatorHandle A;
-    mfem::Vector x, b;
-    impl_->aForm_->FormLinearSystem(impl_->essTdof_, 
-                                    *impl_->potential_, 
-                                    *impl_->bForm_, 
-                                    A, x, b);
-    x = 0.0;
-    
-    // Get the HypreParMatrix from the operator handle
-    mfem::HypreParMatrix* mat = A.As<mfem::HypreParMatrix>();
-    impl_->solver_->solve(*mat, x, b);
-
-    impl_->aForm_->RecoverFEMSolution(x, *impl_->bForm_, *impl_->potential_);
-#else
-    // Serial version
     mfem::SparseMatrix mat;
     mfem::Vector x, b;
     impl_->aForm_->FormLinearSystem(impl_->essTdof_, 
@@ -251,15 +234,14 @@ void ElectrostaticsSolver::solve()
     impl_->solver_->solve(mat, x, b);
 
     impl_->aForm_->RecoverFEMSolution(x, *impl_->bForm_, *impl_->potential_);
-#endif
 }
 
-FemGridFunction& ElectrostaticsSolver::getField()
+mfem::GridFunction& ElectrostaticsSolver::getField()
 {
     return *impl_->potential_;
 }
 
-const FemGridFunction& ElectrostaticsSolver::getField() const
+const mfem::GridFunction& ElectrostaticsSolver::getField() const
 {
     return *impl_->potential_;
 }
@@ -269,17 +251,17 @@ FieldKind ElectrostaticsSolver::getFieldKind() const
     return FieldKind::ElectricPotential;
 }
 
-FemFEspace& ElectrostaticsSolver::getSpace()
+mfem::FiniteElementSpace& ElectrostaticsSolver::getSpace()
 {
     return *impl_->space_;
 }
 
-const FemFEspace& ElectrostaticsSolver::getSpace() const
+const mfem::FiniteElementSpace& ElectrostaticsSolver::getSpace() const
 {
     return *impl_->space_;
 }
 
-void ElectrostaticsSolver::setTemperatureField(const FemGridFunction* temperature)
+void ElectrostaticsSolver::setTemperatureField(const mfem::GridFunction* temperature)
 {
     impl_->conductivity_->setTemperatureField(temperature);
 }

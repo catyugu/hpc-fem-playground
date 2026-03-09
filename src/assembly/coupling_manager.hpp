@@ -3,7 +3,6 @@
 
 #include "physics_field_solver.hpp"
 #include "physics_problem_model.hpp"
-#include "mpfem_types.hpp"
 
 #include <map>
 #include <memory>
@@ -50,7 +49,7 @@ public:
     /**
      * @brief Get a field solution by kind.
      */
-    const FemGridFunction* getField(FieldKind kind) const;
+    const mfem::GridFunction* getField(FieldKind kind) const;
 
     /**
      * @brief Get the number of iterations from the last run.

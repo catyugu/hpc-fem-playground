@@ -12,9 +12,9 @@ class CGGSSolver : public LinearSolverStrategy {
 public:
     CGGSSolver();
 
-    void solve(FemMatrix& matrix,
-               FemVector& solution,
-               FemVector& rhs) override;
+    void solve(mfem::SparseMatrix& matrix,
+               mfem::Vector& solution,
+               mfem::Vector& rhs) override;
 
     void setMaxIterations(int maxIterations) override;
     void setRelativeTolerance(double tolerance) override;

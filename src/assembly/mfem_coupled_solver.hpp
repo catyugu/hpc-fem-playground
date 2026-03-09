@@ -3,7 +3,7 @@
 
 #include "physics_problem_model.hpp"
 #include "simulation_data.hpp"
-#include "mpfem_types.hpp"
+#include "mfem.hpp"
 
 #include <map>
 #include <set>
@@ -23,7 +23,7 @@ public:
      * @param materials Reduced material property model.
      * @param result Output sampled field results.
      */
-    void solve(FemMesh &mesh,
+    void solve(mfem::Mesh &mesh,
                const PhysicsProblemModel &problemModel,
                const PhysicsMaterialDatabase &materials,
                CoupledFieldResult &result) const;
