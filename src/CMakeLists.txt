@@ -1,23 +1,17 @@
-# hpcfem library
-add_library(hpcfem
-    hpcfem/physics/physics_cavity_eigen.cpp
-    hpcfem/physics/physics_waveguide_eigen.cpp
-    hpcfem/physics/physics_maxwell_timedomain.cpp
-    hpcfem/physics/maxwell_materials.cpp
-    hpcfem/physics/maxwell_sources.cpp
-    hpcfem/physics/maxwell_boundary.cpp
-    hpcfem/solvers/solver_hypre_amg.cpp
-)
+file(GLOB_RECURSE MPFEM_SOURCES "*.cpp")
 
-# Set include directories - src is the root
-target_include_directories(hpcfem PUBLIC 
-    ${CMAKE_CURRENT_SOURCE_DIR}
+add_library(mpfem STATIC ${MPFEM_SOURCES})
+target_include_directories(
+	mpfem
+	PUBLIC
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_SOURCE_DIR}/model
+		${CMAKE_CURRENT_SOURCE_DIR}/io
+		${CMAKE_CURRENT_SOURCE_DIR}/physics
+		${CMAKE_CURRENT_SOURCE_DIR}/assembly
+		${CMAKE_CURRENT_SOURCE_DIR}/solver
+		${CMAKE_CURRENT_SOURCE_DIR}/coupling
+		${CMAKE_CURRENT_SOURCE_DIR}/output
 )
-
-# Link dependencies
-target_link_libraries(hpcfem PUBLIC 
-    mfem
-)
-
-# Export compile features
-target_compile_features(hpcfem PUBLIC cxx_std_17)
+target_compile_features(mpfem PUBLIC cxx_std_17)
+target_link_libraries(mpfem PUBLIC mfem)

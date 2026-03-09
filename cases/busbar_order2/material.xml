@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive>
+  <model>
+    <material tag="mat1" type="Common" component="">
+      <propertyGroup tag="Enu" descr="Young's modulus and Poisson's ratio">
+        <set name="E" value="110[GPa]"/>
+        <set name="nu" value="0.35"/>
+      </propertyGroup>
+      <propertyGroup tag="linzRes" descr="Linearized resistivity">
+        <set name="rho0" value="1.72e-8[ohm*m]"/>
+        <set name="alpha" value="0.0039[1/K]"/>
+        <set name="Tref" value="298[K]"/>
+        <addInput quantity="temperature"/>
+      </propertyGroup>
+      <label label="Copper"/>
+      <set name="family" value="copper"/>
+      <propertyGroup tag="def">
+        <set name="relpermeability" value="{'1','0','0','0','1','0','0','0','1'}"/>
+        <set name="electricconductivity" value="{'5.998e7[S/m]','0','0','0','5.998e7[S/m]','0','0','0','5.998e7[S/m]'}"/>
+        <set name="thermalexpansioncoefficient" value="{'17e-6[1/K]','0','0','0','17e-6[1/K]','0','0','0','17e-6[1/K]'}"/>
+        <set name="heatcapacity" value="385[J/(kg*K)]"/>
+        <set name="relpermittivity" value="{'1','0','0','0','1','0','0','0','1'}"/>
+        <set name="density" value="8960[kg/m^3]"/>
+        <set name="thermalconductivity" value="{'400[W/(m*K)]','0','0','0','400[W/(m*K)]','0','0','0','400[W/(m*K)]'}"/>
+      </propertyGroup>
+    </material>
+    <material tag="mat2" type="Common" component="">
+      <propertyGroup tag="Enu" descr="Young's modulus and Poisson's ratio">
+        <set name="E" value="105[GPa]"/>
+        <set name="nu" value="0.33"/>
+      </propertyGroup>
+      <label label="Titanium beta-21S"/>
+      <set name="family" value="titanium"/>
+      <propertyGroup tag="def">
+        <set name="relpermeability" value="{'1','0','0','0','1','0','0','0','1'}"/>
+        <set name="electricconductivity" value="{'7.407e5[S/m]','0','0','0','7.407e5[S/m]','0','0','0','7.407e5[S/m]'}"/>
+        <set name="thermalexpansioncoefficient" value="{'7.06e-6[1/K]','0','0','0','7.06e-6[1/K]','0','0','0','7.06e-6[1/K]'}"/>
+        <set name="heatcapacity" value="710[J/(kg*K)]"/>
+        <set name="relpermittivity" value="{'1','0','0','0','1','0','0','0','1'}"/>
+        <set name="density" value="4940[kg/m^3]"/>
+        <set name="thermalconductivity" value="{'7.5[W/(m*K)]','0','0','0','7.5[W/(m*K)]','0','0','0','7.5[W/(m*K)]'}"/>
+      </propertyGroup>
+    </material>
+  </model>
+</archive>
+
