@@ -41,6 +41,8 @@ public:
     {
         const int attribute = transformation.Attribute;
         if (attribute <= 0 || attribute > sigma0_.Size()) {
+            Logger::log(LogLevel::Error, "ConductivityCoefficient: invalid attribute " 
+                + std::to_string(attribute) + " (max=" + std::to_string(sigma0_.Size()) + ")");
             return 1.0;
         }
 
@@ -52,13 +54,11 @@ public:
             double temperatureValue = tref;
             if (temperature_ != nullptr) {
                 temperatureValue = temperature_->GetValue(transformation, integrationPoint);
-                Check(std::isfinite(temperatureValue),
-                      "ConductivityCoefficient: temperature is not finite (value: " +
-                      std::to_string(temperatureValue) + ")");
             }
             const double rho = rho0 * (1.0 + alpha * (temperatureValue - tref));
             Check(std::isfinite(rho) && rho > 0.0,
-                  "ConductivityCoefficient: resistivity is invalid (rho0=" +
+                  "ConductivityCoefficient: resistivity is invalid (attribute=" +
+                  std::to_string(attribute) + ", rho0=" +
                   std::to_string(rho0) + ", alpha=" + std::to_string(alpha) +
                   ", T=" + std::to_string(temperatureValue) + ", tref=" +
                   std::to_string(tref) + ", rho=" + std::to_string(rho) + ")");
@@ -68,7 +68,8 @@ public:
         // Use constant conductivity
         const double sigma = sigma0_(attribute - 1);
         Check(std::isfinite(sigma) && sigma > 0.0,
-              "ConductivityCoefficient: conductivity is invalid (value: " +
+              "ConductivityCoefficient: conductivity is invalid (attribute=" +
+              std::to_string(attribute) + ", value=" +
               std::to_string(sigma) + ")");
         return sigma;
     }
@@ -97,6 +98,9 @@ public:
     
     mfem::Array<int> essentialBdr_;
     mfem::Vector dirichletValues_;
+    
+    // Boundary condition coefficient - must persist for operation lifetime
+    std::unique_ptr<mfem::PWConstCoefficient> boundaryCoef_;
     
     std::unique_ptr<mfem::BilinearForm> aForm_;
     std::unique_ptr<mfem::LinearForm> bForm_;
@@ -212,8 +216,8 @@ void ElectrostaticsSolver::initialize(mfem::Mesh& mesh,
 
 void ElectrostaticsSolver::applyBoundaryConditions()
 {
-    mfem::PWConstCoefficient boundaryCoef(impl_->dirichletValues_);
-    impl_->potential_->ProjectBdrCoefficient(boundaryCoef, impl_->essentialBdr_);
+    impl_->boundaryCoef_ = std::make_unique<mfem::PWConstCoefficient>(impl_->dirichletValues_);
+    impl_->potential_->ProjectBdrCoefficient(*impl_->boundaryCoef_, impl_->essentialBdr_);
 }
 
 void ElectrostaticsSolver::assemble()

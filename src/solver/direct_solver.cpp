@@ -42,7 +42,6 @@ void DirectSolver::solve(mfem::SparseMatrix& matrix,
 #else
     Logger::log(LogLevel::Error, "Direct solver requested but UMFPACK is not available. Aborting.");
     std::exit(1);
-    }
 #endif
 
     if (printLevel_ > 0) {

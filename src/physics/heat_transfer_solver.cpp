@@ -62,7 +62,6 @@ public:
         Check(potential_ != nullptr, "JouleHeatCoefficient: potential field is null");
         Check(conductivity_ != nullptr, "JouleHeatCoefficient: conductivity coefficient is null");
 
-        transformation.SetIntPoint(&integrationPoint);
         mfem::Vector gradient;
         potential_->GetGradient(transformation, gradient);
 
@@ -115,6 +114,11 @@ public:
     mfem::Array<int> convectionBdr_;
     mfem::Vector convectionH_;      // Heat transfer coefficients
     mfem::Vector convectionTinf_;   // Ambient temperatures
+    
+    // Boundary condition coefficients - must persist for integrator lifetime
+    std::unique_ptr<mfem::PWConstCoefficient> hCoef_;
+    std::unique_ptr<mfem::PWConstCoefficient> tinfCoef_;
+    std::unique_ptr<mfem::ProductCoefficient> htinfCoef_;
 
     // Joule heating source
     std::unique_ptr<JouleHeatCoefficient> jouleHeatSource_;
@@ -262,9 +266,10 @@ void HeatTransferSolver::assemble()
 
     // Add convection boundary condition: h * T term
     if (impl_->convectionBdr_.Max() > 0) {
-        mfem::PWConstCoefficient hCoef(impl_->convectionH_);
+        // Store coefficients as members to ensure they persist during assembly
+        impl_->hCoef_ = std::make_unique<mfem::PWConstCoefficient>(impl_->convectionH_);
         impl_->aForm_->AddBoundaryIntegrator(
-            new mfem::MassIntegrator(hCoef), impl_->convectionBdr_);
+            new mfem::MassIntegrator(*impl_->hCoef_), impl_->convectionBdr_);
     }
 
     impl_->aForm_->Assemble();
@@ -280,11 +285,14 @@ void HeatTransferSolver::assemble()
 
     // Add convection boundary term: h * T_inf
     if (impl_->convectionBdr_.Max() > 0) {
-        mfem::PWConstCoefficient hCoef(impl_->convectionH_);
-        mfem::PWConstCoefficient tinfCoef(impl_->convectionTinf_);
-        mfem::ProductCoefficient htinfCoef(hCoef, tinfCoef);
+        // Reuse hCoef_ if already created, or create it
+        if (!impl_->hCoef_) {
+            impl_->hCoef_ = std::make_unique<mfem::PWConstCoefficient>(impl_->convectionH_);
+        }
+        impl_->tinfCoef_ = std::make_unique<mfem::PWConstCoefficient>(impl_->convectionTinf_);
+        impl_->htinfCoef_ = std::make_unique<mfem::ProductCoefficient>(*impl_->hCoef_, *impl_->tinfCoef_);
         impl_->bForm_->AddBoundaryIntegrator(
-            new mfem::BoundaryLFIntegrator(htinfCoef), impl_->convectionBdr_);
+            new mfem::BoundaryLFIntegrator(*impl_->htinfCoef_), impl_->convectionBdr_);
     }
 
     impl_->bForm_->Assemble();

@@ -14,9 +14,16 @@ using namespace mpfem;
 
 int main(int argc, char *argv[])
 {
+    #ifdef MFEM_USE_MPI
+    mfem::Mpi::Init(argc, argv);
+    #endif
+
     if (argc < 2)
     {
         std::cerr << "Usage: " << argv[0] << " <case.xml>" << std::endl;
+        #ifdef MFEM_USE_MPI
+        mfem::Mpi::Finalize();
+        #endif
         return 1;
     }
 
@@ -95,6 +102,8 @@ int main(int argc, char *argv[])
         std::filesystem::path vtuOutput = resultsDir / "mpfem_result.vtu";
         VtuExporter::write(vtuOutput.string(), result);
     }
-
+    #ifdef MFEM_USE_MPI
+    mfem::Mpi::Finalize();
+    #endif
     return 0;
 }

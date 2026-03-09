@@ -85,12 +85,12 @@ public:
         vector.SetSize(dimension_ * dimension_);
         vector = 0.0;
 
-        if (temperature_ == nullptr || alpha_ == nullptr 
+        if (temperature_ == nullptr || alpha_ == nullptr
             || lambda_ == nullptr || mu_ == nullptr) {
             return;
         }
 
-        transformation.SetIntPoint(&integrationPoint);
+        // Note: MFEM assembly loop already sets the integration point before calling Eval.
         const double temperatureValue = temperature_->GetValue(transformation, integrationPoint);
         const double alphaValue = alpha_->Eval(transformation, integrationPoint);
         const double lambdaValue = lambda_->Eval(transformation, integrationPoint);
@@ -142,6 +142,10 @@ public:
 
     // Boundary conditions
     mfem::Array<int> fixedBdr_;
+    
+    // Boundary condition coefficients - must persist for operation lifetime
+    mfem::Vector zeroDisp_;
+    std::unique_ptr<mfem::VectorConstantCoefficient> zeroCoef_;
 
     std::unique_ptr<mfem::BilinearForm> aForm_;
     std::unique_ptr<mfem::LinearForm> bForm_;
@@ -292,15 +296,17 @@ void SolidMechanicsSolver::initialize(mfem::Mesh& mesh,
         impl_->thermalExpansionLoad_->setMuCoefficient(impl_->mu_.get());
         impl_->thermalExpansionLoad_->setReferenceTemperature(impl_->referenceTemperature_);
     }
+    
+    // Initialize boundary condition coefficients
+    impl_->zeroDisp_.SetSize(mesh.Dimension());
+    impl_->zeroDisp_ = 0.0;
+    impl_->zeroCoef_ = std::make_unique<mfem::VectorConstantCoefficient>(impl_->zeroDisp_);
 }
 
 void SolidMechanicsSolver::applyBoundaryConditions()
 {
     // Project zero displacement on fixed boundaries
-    mfem::Vector zeroDisp(impl_->mesh_->Dimension());
-    zeroDisp = 0.0;
-    mfem::VectorConstantCoefficient zeroCoef(zeroDisp);
-    impl_->displacement_->ProjectBdrCoefficient(zeroCoef, impl_->fixedBdr_);
+    impl_->displacement_->ProjectBdrCoefficient(*impl_->zeroCoef_, impl_->fixedBdr_);
 }
 
 void SolidMechanicsSolver::assemble()
