@@ -83,7 +83,13 @@ public:
               "JouleHeatCoefficient: gradient norm squared is not finite (value: " +
               std::to_string(norm2) + ")");
 
-        return sigma * norm2;
+        const double result = sigma * norm2;
+        Check(std::isfinite(result) && result >= 0.0,
+              "JouleHeatCoefficient: result is not finite or negative (sigma=" +
+              std::to_string(sigma) + ", norm2=" + std::to_string(norm2) +
+              ", result=" + std::to_string(result) + ")");
+
+        return result;
     }
 
 private:
