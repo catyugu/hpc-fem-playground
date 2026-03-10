@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<case name="busbar">
+  <paths
+    mesh="mesh.mphtxt"
+    materials="material.xml"
+    comsol_result="result.txt"
+  />
+
+  <study type="steady" />
+
+  <variables>
+    <var name="L" value="9[cm]" si="0.09" />
+    <var name="rad_1" value="6[mm]" si="0.006" />
+    <var name="tbb" value="5[mm]" si="0.005" />
+    <var name="wbb" value="5[cm]" si="0.05" />
+    <var name="mh" value="3[mm]" si="0.003" />
+    <var name="htc" value="5[W/m^2/K]" si="5.0" />
+    <var name="Vtot" value="20[mV]" si="0.02" />
+  </variables>
+
+  <materials>
+    <assign domains="1" material="mat1" />
+    <assign domains="2-7" material="mat2" />
+  </materials>
+
+  <physics kind="electrostatics" order="2">
+    <solver type="cg_gs" max_iter="500" tolerance="1e-12" print_level="0"/>
+    <boundary kind="voltage" ids="43" value="Vtot" />
+    <boundary kind="voltage" ids="8,15" value="0[V]" />
+    <boundary kind="electric_insulation" ids="1-7,9-14,16-42" />
+  </physics>
+
+  <physics kind="heat_transfer" order="2">
+    <solver type="cg_gs" max_iter="500" tolerance="1e-12" print_level="0"/>
+    <boundary kind="convection" ids="1-7,9-14,16-42" value="htc" aux="293.15[K]" />
+    <boundary kind="thermal_insulation" ids="8,15,43" />
+    <source kind="volumetric_heat_source" domains="1-7" value="joule_heating" />
+  </physics>
+
+  <physics kind="solid_mechanics" order="1">
+    <solver type="cg_gs" max_iter="500" tolerance="1e-10" print_level="0"/>
+    <boundary kind="fixed_constraint" ids="8,15,43" value="0[m]" />
+    <boundary kind="free_boundary" ids="1-7,9-14,16-42" />
+  </physics>
+
+  <coupledPhysics name="joule_heat" kind="joule_heating" physics="electrostatics,heat_transfer" domains="1-7" />
+  <coupledPhysics name="thermal_expansion" kind="thermal_expansion" physics="heat_transfer,solid_mechanics" domains="1-7" />
+
+  <coupling method="picard" max_iter="20" tolerance="1e-7"/>
+</case>
