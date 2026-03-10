@@ -216,15 +216,16 @@ void SolidMechanicsSolver::Impl::buildBoundaryMarkers()
     fixedBdr_.SetSize(maxBdrAttr);
     fixedBdr_ = 0;
 
-    for (const auto& bc : problemModel_->boundaries) {
-        if (bc.field != FieldKind::Displacement) {
-            continue;
-        }
-        if (bc.kind != BoundaryConditionKind::Dirichlet) {
-            continue;
-        }
+    // Get boundary conditions for this field
+    auto fieldIt = problemModel_->boundaries.find(FieldKind::Displacement);
+    if (fieldIt == problemModel_->boundaries.end()) {
+        return;
+    }
 
-        for (int id : bc.boundaryIds) {
+    const BoundaryConditions& bcMap = fieldIt->second;
+    for (const auto& [id, params] : bcMap) {
+        // Handle fixed constraint boundary condition
+        if (params.kind == "fixed_constraint") {
             if (id > 0 && id <= maxBdrAttr) {
                 fixedBdr_[id - 1] = 1;
             }

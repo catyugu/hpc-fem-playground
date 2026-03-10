@@ -1,4 +1,5 @@
 #include "physics_problem_builder.hpp"
+#include "boundary_spec.hpp"
 #include "value_parser.hpp"
 #include "logger.hpp"
 
@@ -17,23 +18,6 @@ FieldKind mapPhysicsKindToField(const std::string &physicsKind)
     return FieldKind::Displacement;
 }
 
-BoundaryConditionKind mapBoundaryKind(const std::string &boundaryKind)
-{
-    if (boundaryKind == "voltage" || boundaryKind == "fixed_constraint") {
-        return BoundaryConditionKind::Dirichlet;
-    }
-    if (boundaryKind == "electric_insulation" || boundaryKind == "thermal_insulation") {
-        return BoundaryConditionKind::Insulation;
-    }
-    if (boundaryKind == "convection") {
-        return BoundaryConditionKind::Convection;
-    }
-    if (boundaryKind == "free_boundary") {
-        return BoundaryConditionKind::Free;
-    }
-    return BoundaryConditionKind::Insulation;
-}
-
 CouplingKind mapCouplingKind(const std::string &couplingKind)
 {
     if (couplingKind == "joule_heating") {
@@ -45,17 +29,22 @@ CouplingKind mapCouplingKind(const std::string &couplingKind)
     return CouplingKind::Unknown;
 }
 
-double getValueOrDefault(const std::map<std::string, double> &values,
-                         const std::string &name,
-                         double defaultValue)
+double resolveValue(const std::map<std::string, double> &variables,
+                    const std::string &text,
+                    double defaultValue = 0.0)
 {
-    auto iter = values.find(name);
-    if (iter == values.end()) {
-        double result = defaultValue;
-        ValueParser::parseFirstNumber(name, result);
-        return result;
+    if (text.empty()) {
+        return defaultValue;
     }
-    return iter->second;
+    // First try to find in variables map
+    auto iter = variables.find(text);
+    if (iter != variables.end()) {
+        return iter->second;
+    }
+    // Otherwise parse as number
+    double result = defaultValue;
+    ValueParser::parseFirstNumber(text, result);
+    return result;
 }
 
 } // namespace
@@ -90,21 +79,31 @@ void PhysicsProblemBuilder::build(const CaseDefinition &caseDefinition,
         fieldConfig.solver = physicsDef.solver;
         problemModel.fieldConfigs[fieldKind] = fieldConfig;
 
+        // Initialize boundary conditions map for this field
+        BoundaryConditions& bcMap = problemModel.boundaries[fieldKind];
+
+        // Process each boundary condition definition
         for (const auto& boundary : physicsDef.boundaries) {
-            FieldBoundaryCondition modelBoundary;
-            modelBoundary.field = fieldKind;
-            modelBoundary.kind = mapBoundaryKind(boundary.kind);
-            modelBoundary.boundaryIds = boundary.ids;
-            modelBoundary.value = getValueOrDefault(problemModel.variables, boundary.valueText, 0.0);
-            modelBoundary.auxiliary = getValueOrDefault(problemModel.variables, boundary.auxText, 0.0);
-            problemModel.boundaries.push_back(modelBoundary);
+            // Resolve parameters to numeric values
+            std::map<std::string, double> resolvedParams;
+            for (const auto& [name, text] : boundary.params) {
+                resolvedParams[name] = resolveValue(problemModel.variables, text);
+            }
+
+            // Store boundary condition for each boundary id
+            for (int id : boundary.ids) {
+                BoundaryParams params;
+                params.kind = boundary.kind;
+                params.values = resolvedParams;
+                bcMap[id] = params;
+            }
         }
 
         for (const auto& source : physicsDef.sources) {
             FieldSource modelSource;
             modelSource.field = fieldKind;
             modelSource.domainIds = source.domainIds;
-            modelSource.value = getValueOrDefault(problemModel.variables, source.valueText, 0.0);
+            modelSource.value = resolveValue(problemModel.variables, source.valueText);
             modelSource.coupled = source.valueText == "joule_heating";
             modelSource.couplingKind = modelSource.coupled ? CouplingKind::JouleHeating : CouplingKind::Unknown;
             problemModel.sources.push_back(modelSource);

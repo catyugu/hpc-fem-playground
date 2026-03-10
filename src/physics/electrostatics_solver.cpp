@@ -153,18 +153,21 @@ void ElectrostaticsSolver::Impl::buildBoundaryMarkers()
     dirichletValues_.SetSize(maxBdrAttr);
     dirichletValues_ = 0.0;
 
-    for (const auto& bc : problemModel_->boundaries) {
-        if (bc.field != FieldKind::ElectricPotential) {
-            continue;
-        }
-        if (bc.kind != BoundaryConditionKind::Dirichlet) {
-            continue;
-        }
+    // Get boundary conditions for this field
+    auto fieldIt = problemModel_->boundaries.find(FieldKind::ElectricPotential);
+    if (fieldIt == problemModel_->boundaries.end()) {
+        return;
+    }
 
-        for (int id : bc.boundaryIds) {
+    const BoundaryConditions& bcMap = fieldIt->second;
+    for (const auto& [id, params] : bcMap) {
+        // Handle voltage (Dirichlet) boundary condition
+        if (params.kind == "voltage") {
             if (id > 0 && id <= maxBdrAttr) {
                 essentialBdr_[id - 1] = 1;
-                dirichletValues_(id - 1) = bc.value;
+                auto valueIt = params.values.find("value");
+                dirichletValues_(id - 1) = (valueIt != params.values.end()) 
+                    ? valueIt->second : 0.0;
             }
         }
     }

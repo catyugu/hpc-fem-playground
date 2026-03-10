@@ -1,6 +1,7 @@
 #ifndef MPFEM_CASE_MODEL_HPP
 #define MPFEM_CASE_MODEL_HPP
 
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -34,12 +35,14 @@ struct MaterialAssignment {
 
 /**
  * @brief Boundary condition definition for one physics block.
+ * 
+ * Parameters are stored as key-value pairs. Different boundary condition types
+ * require different parameters (defined by BoundarySpec registry).
  */
 struct BoundaryCondition {
     std::string kind;
     std::set<int> ids;
-    std::string valueText;
-    std::string auxText;
+    std::map<std::string, std::string> params;  // param name -> value expression
 };
 
 /**
