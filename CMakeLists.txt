@@ -25,6 +25,21 @@ if(NOT DEFINED THIRD_PARTY_DIR)
     set(THIRD_PARTY_DIR ${PROJECT_SOURCE_DIR}/share CACHE PATH "Path to store third-party sources")
 endif()
 
+# PARDISO solver option (requires Intel MKL)
+option(MPFEM_USE_PARDISO "Enable PARDISO solver (requires Intel MKL)" OFF)
+if(MPFEM_USE_PARDISO)
+    set(MFEM_USE_MKL_PARDISO ON CACHE BOOL "Enable MKL Pardiso in MFEM" FORCE)
+    set(MKL_PARDISO_DIR "/usr" CACHE STRING "MKL Pardiso installation prefix")
+    set(MKL_PARDISO_INCLUDE_DIRS "/usr/include;/usr/include/mkl" CACHE STRING "MKL include directories")
+    # Use GNU OpenMP threading layer (works with libgomp)
+    set(MKL_PARDISO_LIBRARIES
+        "/usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so"
+        "/usr/lib/x86_64-linux-gnu/libmkl_gnu_thread.so"
+        "/usr/lib/x86_64-linux-gnu/libmkl_core.so"
+        CACHE STRING "MKL PARDISO libraries")
+    find_package(OpenMP REQUIRED)
+endif()
+
 # MFEM source (vendor or clone)
 set(MFEM_INCLUDE_DIR ${THIRD_PARTY_DIR}/mfem)
 if(NOT EXISTS ${MFEM_INCLUDE_DIR})

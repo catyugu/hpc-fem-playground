@@ -1,5 +1,4 @@
 #include "case_xml_reader.hpp"
-#include "boundary_spec.hpp"
 #include "value_parser.hpp"
 #include "logger.hpp"
 

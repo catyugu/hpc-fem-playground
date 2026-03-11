@@ -15,11 +15,11 @@ namespace mpfem {
 
 namespace {
 
-void recoverVertexSampleSerial(const mfem::Mesh& mesh,
-                               const mfem::GridFunction& potential,
-                               const mfem::GridFunction& temperature,
-                               const mfem::GridFunction& displacement,
-                               CoupledFieldResult& result)
+void recoverVertexSample(const mfem::Mesh& mesh,
+                         const mfem::GridFunction& potential,
+                         const mfem::GridFunction& temperature,
+                         const mfem::GridFunction& displacement,
+                         CoupledFieldResult& result)
 {
     const int vertexCount = mesh.GetNV();
     result.coordinates.resize(vertexCount);
@@ -58,15 +58,6 @@ void recoverVertexSampleSerial(const mfem::Mesh& mesh,
         const double uz = nodalUz(i);
         result.displacement[i] = std::sqrt(ux * ux + uy * uy + uz * uz);
     }
-}
-
-void recoverVertexSample(const mfem::Mesh& mesh,
-                         const mfem::GridFunction& potential,
-                         const mfem::GridFunction& temperature,
-                         const mfem::GridFunction& displacement,
-                         CoupledFieldResult& result)
-{
-    recoverVertexSampleSerial(mesh, potential, temperature, displacement, result);
 }
 
 } // namespace
@@ -131,8 +122,10 @@ void MfemCoupledSolver::solve(mfem::Mesh& mesh,
     couplingManager.registerField(FieldKind::Displacement, solidMechanicsSolver.get());
     couplingManager.setCouplingConfig(problemModel.couplingConfig);
 
-    // Setup coupling
-    couplingManager.setupCoupling();
+    // Register coupling types for dependency graph construction
+    for (CouplingKind kind : problemModel.couplings) {
+        couplingManager.registerCoupling(kind);
+    }
 
     // Run coupled simulation
     couplingManager.run();

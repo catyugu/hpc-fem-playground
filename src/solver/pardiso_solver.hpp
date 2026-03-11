@@ -1,20 +1,22 @@
-#ifndef MPFEM_DIRECT_SOLVER_HPP
-#define MPFEM_DIRECT_SOLVER_HPP
+#ifndef MPFEM_PARDISO_SOLVER_HPP
+#define MPFEM_PARDISO_SOLVER_HPP
 
 #include "linear_solver_strategy.hpp"
 
 namespace mpfem {
 
 /**
- * @brief Direct solver using UMFPACK (SuiteSparse).
+ * @brief Direct solver using Intel MKL PARDISO.
+ * 
+ * PARDISO is typically faster than UMFPACK for larger problems and supports
+ * multi-threaded parallelism within the solver.
  */
-class DirectSolver : public LinearSolverStrategy {
+class PardisoSolver : public LinearSolverStrategy {
 public:
     void solve(mfem::SparseMatrix& matrix,
                mfem::Vector& solution,
                mfem::Vector& rhs) override;
 
-    // These are ignored for direct solvers
     void setMaxIterations(int) override {}
     void setRelativeTolerance(double) override {}
     void setAbsoluteTolerance(double) override {}

@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <stdexcept>
 
 namespace mpfem {
 
@@ -12,7 +13,6 @@ namespace mpfem {
  * @brief Coupling iteration method.
  */
 enum class CouplingMethod {
-    NewtonRaphson,
     Picard
 };
 
@@ -79,7 +79,7 @@ struct PhysicsDefinition {
  * @brief Coupling iteration configuration.
  */
 struct CouplingConfig {
-    std::string method = "newton_raphson";  // "newton_raphson", "picard"
+    std::string method = "picard";
     int maxIterations = 15;
     double tolerance = 1e-6;
 };
@@ -89,7 +89,7 @@ struct CouplingConfig {
  */
 inline CouplingMethod parseCouplingMethod(const std::string& method) {
     if (method == "picard") return CouplingMethod::Picard;
-    return CouplingMethod::NewtonRaphson;
+    else throw std::invalid_argument("Unknown coupling method");
 }
 
 /**
