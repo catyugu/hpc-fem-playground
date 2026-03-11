@@ -3,6 +3,10 @@
 #include "direct_solver.hpp"
 #include "logger.hpp"
 
+#ifdef MFEM_USE_MKL_PARDISO
+#include "pardiso_solver.hpp"
+#endif
+
 namespace mpfem {
 
 std::unique_ptr<LinearSolverStrategy> createLinearSolver(
@@ -13,8 +17,17 @@ std::unique_ptr<LinearSolverStrategy> createLinearSolver(
 {
     std::unique_ptr<LinearSolverStrategy> solver;
 
-    if (type == "direct" || type == "umfpack") {
-        // Direct solver
+    if (type == "pardiso") {
+#ifdef MFEM_USE_MKL_PARDISO
+        auto pardisoSolver = std::make_unique<PardisoSolver>();
+        pardisoSolver->setPrintLevel(printLevel);
+        solver = std::move(pardisoSolver);
+        Logger::log(LogLevel::Info, "Using PARDISO solver");
+#else
+        Logger::log(LogLevel::Error, "PARDISO solver requested but MKL PARDISO is not available. Aborting.");
+        std::exit(1);
+#endif
+    } else if (type == "umfpack") {
 #ifdef MFEM_USE_SUITESPARSE
         auto directSolver = std::make_unique<DirectSolver>();
         directSolver->setMaxIterations(maxIterations);
@@ -27,14 +40,13 @@ std::unique_ptr<LinearSolverStrategy> createLinearSolver(
         std::exit(1);
 #endif
     } else if (type == "cg_gs") {
-        // CG with Gauss-Seidel preconditioner
         auto cggs = std::make_unique<CGGSSolver>();
         cggs->setMaxIterations(maxIterations);
         cggs->setRelativeTolerance(tolerance);
         cggs->setPrintLevel(printLevel);
         solver = std::move(cggs);
         Logger::log(LogLevel::Info, "Using CG solver with Gauss-Seidel preconditioner");
-    } else{
+    } else {
         Logger::log(LogLevel::Error, "Unknown linear solver type: " + type + ". Aborting.");
         std::exit(1);
     }

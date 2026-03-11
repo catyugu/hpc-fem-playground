@@ -24,7 +24,7 @@
   </materials>
 
   <physics kind="electrostatics" order="2">
-    <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
+    <solver type="umfpack" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <!-- Split voltage boundaries to test new structure -->
     <boundary kind="voltage" ids="43">
       <param name="value" value="Vtot"/>
@@ -39,7 +39,7 @@
   </physics>
 
   <physics kind="heat_transfer" order="2">
-    <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
+    <solver type="umfpack" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <!-- Split convection into multiple groups to test new structure -->
     <boundary kind="convection" ids="1-7">
       <param name="h" value="htc"/>
@@ -62,7 +62,7 @@
   </physics>
 
   <physics kind="solid_mechanics" order="2">
-    <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
+    <solver type="umfpack" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <!-- Split fixed constraints to test new structure -->
     <boundary kind="fixed_constraint" ids="8" />
     <boundary kind="fixed_constraint" ids="15" />

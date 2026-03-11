@@ -55,14 +55,7 @@ int main(int argc, char *argv[])
         PhysicsProblemBuilder::build(caseDefinition, materialDatabase, problemModel);
     }
 
-    // ========== Step 4: Load reference result ==========
-    {
-        ScopedTimer timer("Reference result loading");
-        std::vector<ComsolResultRow> referenceRows;
-        ComsolResultReader::readFromFile(referencePath.string(), referenceRows);
-    }
-
-    // ========== Step 5: Load mesh ==========
+    // ========== Step 4: Load mesh ==========
     std::unique_ptr<mfem::Mesh> meshPtr;
     {
         ScopedTimer timer("Mesh loading");
