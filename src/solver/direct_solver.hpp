@@ -6,32 +6,25 @@
 namespace mpfem {
 
 /**
- * @brief Direct solver using MFEM's built-in capabilities.
- * Falls back to iterative solver if direct solver is not available.
+ * @brief Direct solver using UMFPACK (SuiteSparse).
  */
 class DirectSolver : public LinearSolverStrategy {
 public:
-    DirectSolver();
-
     void solve(mfem::SparseMatrix& matrix,
                mfem::Vector& solution,
                mfem::Vector& rhs) override;
 
-    void setMaxIterations(int maxIterations) override;
-    void setRelativeTolerance(double tolerance) override;
-    void setAbsoluteTolerance(double tolerance) override;
-    void setPrintLevel(int level) override;
+    // These are ignored for direct solvers
+    void setMaxIterations(int) override {}
+    void setRelativeTolerance(double) override {}
+    void setAbsoluteTolerance(double) override {}
+    void setPrintLevel(int level) override { printLevel_ = level; }
 
-    int getNumIterations() const override;
-    double getFinalResidual() const override;
+    int getNumIterations() const override { return 1; }
+    double getFinalResidual() const override { return 0.0; }
 
 private:
-    int maxIterations_;
-    double relativeTolerance_;
-    double absoluteTolerance_;
-    int printLevel_;
-    mutable int numIterations_;
-    mutable double finalResidual_;
+    int printLevel_ = 0;
 };
 
 } // namespace mpfem

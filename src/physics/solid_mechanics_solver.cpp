@@ -1,6 +1,4 @@
 #include "solid_mechanics_solver.hpp"
-#include "linear_solver_strategy.hpp"
-#include "mfem.hpp"
 #include "logger.hpp"
 
 #include <cmath>
@@ -8,188 +6,71 @@
 namespace mpfem {
 
 namespace {
-
 const double DEFAULT_REFERENCE_TEMPERATURE = 293.15;
-
-/**
- * @brief Attribute-based scalar coefficient.
- */
-class AttributeScalarCoefficient : public mfem::Coefficient {
-public:
-    explicit AttributeScalarCoefficient() : values_() {}
-
-    void setValues(const mfem::Vector& values)
-    {
-        values_ = values;
-    }
-
-    double Eval(mfem::ElementTransformation& transformation,
-                const mfem::IntegrationPoint& integrationPoint) override
-    {
-        (void)integrationPoint;
-        const int attribute = transformation.Attribute;
-        if (attribute <= 0 || attribute > values_.Size()) {
-            return 1.0;
-        }
-        return values_(attribute - 1);
-    }
-
-private:
-    mfem::Vector values_;
-};
-
-/**
- * @brief Thermal expansion gradient load coefficient.
- */
-class ThermalExpansionGradLoadCoefficient : public mfem::VectorCoefficient {
-public:
-    explicit ThermalExpansionGradLoadCoefficient(int dimension)
-        : mfem::VectorCoefficient(dimension * dimension)
-        , dimension_(dimension)
-        , temperature_(nullptr)
-        , alpha_(nullptr)
-        , lambda_(nullptr)
-        , mu_(nullptr)
-        , referenceTemperature_(DEFAULT_REFERENCE_TEMPERATURE)
-    {}
-
-    void setTemperatureField(const mfem::GridFunction* temperature)
-    {
-        temperature_ = temperature;
-    }
-
-    void setAlphaCoefficient(mfem::Coefficient* alpha)
-    {
-        alpha_ = alpha;
-    }
-
-    void setLambdaCoefficient(mfem::Coefficient* lambda)
-    {
-        lambda_ = lambda;
-    }
-
-    void setMuCoefficient(mfem::Coefficient* mu)
-    {
-        mu_ = mu;
-    }
-
-    void setReferenceTemperature(double referenceTemperature)
-    {
-        referenceTemperature_ = referenceTemperature;
-    }
-
-    void Eval(mfem::Vector& vector,
-              mfem::ElementTransformation& transformation,
-              const mfem::IntegrationPoint& integrationPoint) override
-    {
-        vector.SetSize(dimension_ * dimension_);
-        vector = 0.0;
-
-        if (temperature_ == nullptr || alpha_ == nullptr
-            || lambda_ == nullptr || mu_ == nullptr) {
-            return;
-        }
-
-        // Note: MFEM assembly loop already sets the integration point before calling Eval.
-        const double temperatureValue = temperature_->GetValue(transformation, integrationPoint);
-        const double alphaValue = alpha_->Eval(transformation, integrationPoint);
-        const double lambdaValue = lambda_->Eval(transformation, integrationPoint);
-        const double muValue = mu_->Eval(transformation, integrationPoint);
-        const double deltaTemperature = temperatureValue - referenceTemperature_;
-
-        const double thermalModulus = (3.0 * lambdaValue + 2.0 * muValue) 
-                                     * alphaValue * deltaTemperature;
-
-        mfem::Vector loadVector(dimension_ * dimension_);
-        loadVector = 0.0;
-        for (int i = 0; i < dimension_; ++i) {
-            loadVector(i * dimension_ + i) = thermalModulus;
-        }
-        vector = loadVector;
-    }
-
-private:
-    int dimension_;
-    const mfem::GridFunction* temperature_;
-    mfem::Coefficient* alpha_;
-    mfem::Coefficient* lambda_;
-    mfem::Coefficient* mu_;
-    double referenceTemperature_;
-};
-
 } // namespace
 
-class SolidMechanicsSolver::Impl {
-public:
-    int order_ = 1;
-    mfem::Mesh* mesh_ = nullptr;
-    std::unique_ptr<mfem::H1_FECollection> fec_;
-    std::unique_ptr<mfem::FiniteElementSpace> space_;
-    std::unique_ptr<mfem::GridFunction> displacement_;
-    std::unique_ptr<LinearSolverStrategy> solver_;
+// --- ThermalExpansionLoadCoefficient ---
 
-    // Material coefficients
-    mfem::Vector young_, poisson_, thermalExpansion_;
-    std::unique_ptr<AttributeScalarCoefficient> lambda_;
-    std::unique_ptr<AttributeScalarCoefficient> mu_;
-    std::unique_ptr<AttributeScalarCoefficient> alpha_;
-    mfem::Vector lambdaValues_, muValues_;
-
-    // Thermal expansion load
-    std::unique_ptr<ThermalExpansionGradLoadCoefficient> thermalExpansionLoad_;
-    bool hasThermalExpansion_ = false;
-    double referenceTemperature_ = DEFAULT_REFERENCE_TEMPERATURE;
-
-    // Boundary conditions
-    mfem::Array<int> fixedBdr_;
-    
-    // Boundary condition coefficients - must persist for operation lifetime
-    mfem::Vector zeroDisp_;
-    std::unique_ptr<mfem::VectorConstantCoefficient> zeroCoef_;
-
-    std::unique_ptr<mfem::BilinearForm> aForm_;
-    std::unique_ptr<mfem::LinearForm> bForm_;
-    mfem::Array<int> essTdof_;
-
-    const PhysicsProblemModel* problemModel_ = nullptr;
-
-    void fillMaterialVectors(const PhysicsMaterialDatabase& materials);
-    void computeLameParameters();
-    void buildBoundaryMarkers();
-    void parseCouplingTerms();
-};
-
-void SolidMechanicsSolver::Impl::fillMaterialVectors(const PhysicsMaterialDatabase& materials)
+void ThermalExpansionLoadCoefficient::Eval(mfem::Vector& V,
+                                           mfem::ElementTransformation& tr,
+                                           const mfem::IntegrationPoint& ip)
 {
-    const int maxAttribute = mesh_->attributes.Max();
-    young_.SetSize(maxAttribute);
-    poisson_.SetSize(maxAttribute);
-    thermalExpansion_.SetSize(maxAttribute);
+    V.SetSize(dimension_ * dimension_);
+    V = 0.0;
+
+    if (!temperature_ || !alpha_ || !lambda_ || !mu_) return;
+
+    const double temp = temperature_->GetValue(tr, ip);
+    const double alpha = alpha_->Eval(tr, ip);
+    const double lambda = lambda_->Eval(tr, ip);
+    const double mu = mu_->Eval(tr, ip);
+    const double deltaT = temp - referenceTemperature_;
+
+    const double thermalModulus = (3.0 * lambda + 2.0 * mu) * alpha * deltaT;
+
+    for (int i = 0; i < dimension_; ++i) {
+        V(i * dimension_ + i) = thermalModulus;
+    }
+}
+
+// --- SolidMechanicsSolver ---
+
+void SolidMechanicsSolver::setOrder(int order)
+{
+    order_ = order > 0 ? order : 1;
+}
+
+void SolidMechanicsSolver::setSolver(std::unique_ptr<LinearSolverStrategy> solver)
+{
+    solver_ = std::move(solver);
+}
+
+void SolidMechanicsSolver::fillMaterialVectors(const PhysicsMaterialDatabase& materials)
+{
+    const int maxAttr = mesh_->attributes.Max();
+    young_.SetSize(maxAttr);
+    poisson_.SetSize(maxAttr);
+    thermalExpansion_.SetSize(maxAttr);
 
     young_ = 1.0;
     poisson_ = 0.3;
     thermalExpansion_ = 1.0e-5;
 
-    for (int attribute = 1; attribute <= maxAttribute; ++attribute) {
-        auto tagIter = problemModel_->domainMaterialTag.find(attribute);
-        if (tagIter == problemModel_->domainMaterialTag.end()) {
-            continue;
-        }
+    for (int attr = 1; attr <= maxAttr; ++attr) {
+        auto tagIt = problemModel_->domainMaterialTag.find(attr);
+        if (tagIt == problemModel_->domainMaterialTag.end()) continue;
 
-        auto propIter = materials.byTag.find(tagIter->second);
-        if (propIter == materials.byTag.end()) {
-            continue;
-        }
+        auto propIt = materials.byTag.find(tagIt->second);
+        if (propIt == materials.byTag.end()) continue;
 
-        const MaterialPropertyModel& prop = propIter->second;
-        young_(attribute - 1) = prop.youngModulus > 0.0 ? prop.youngModulus : 1.0;
-        poisson_(attribute - 1) = prop.poissonRatio;
-        thermalExpansion_(attribute - 1) = prop.thermalExpansion > 0.0 
-            ? prop.thermalExpansion : 1.0e-5;
+        const auto& prop = propIt->second;
+        young_(attr - 1) = prop.youngModulus > 0.0 ? prop.youngModulus : 1.0;
+        poisson_(attr - 1) = prop.poissonRatio;
+        thermalExpansion_(attr - 1) = prop.thermalExpansion > 0.0 ? prop.thermalExpansion : 1.0e-5;
     }
 }
 
-void SolidMechanicsSolver::Impl::computeLameParameters()
+void SolidMechanicsSolver::computeLameParameters()
 {
     const int n = young_.Size();
     lambdaValues_.SetSize(n);
@@ -202,41 +83,30 @@ void SolidMechanicsSolver::Impl::computeLameParameters()
         lambdaValues_(i) = e * nu / ((1.0 + nu) * (1.0 - 2.0 * nu));
     }
 
-    lambda_ = std::make_unique<AttributeScalarCoefficient>();
-    lambda_->setValues(lambdaValues_);
-    mu_ = std::make_unique<AttributeScalarCoefficient>();
-    mu_->setValues(muValues_);
-    alpha_ = std::make_unique<AttributeScalarCoefficient>();
-    alpha_->setValues(thermalExpansion_);
+    lambda_.setValues(lambdaValues_);
+    mu_.setValues(muValues_);
+    alpha_.setValues(thermalExpansion_);
 }
 
-void SolidMechanicsSolver::Impl::buildBoundaryMarkers()
+void SolidMechanicsSolver::buildBoundaryMarkers()
 {
     const int maxBdrAttr = mesh_->bdr_attributes.Max();
     fixedBdr_.SetSize(maxBdrAttr);
     fixedBdr_ = 0;
 
-    // Get boundary conditions for this field
     auto fieldIt = problemModel_->boundaries.find(FieldKind::Displacement);
-    if (fieldIt == problemModel_->boundaries.end()) {
-        return;
-    }
+    if (fieldIt == problemModel_->boundaries.end()) return;
 
-    const BoundaryConditions& bcMap = fieldIt->second;
-    for (const auto& [id, params] : bcMap) {
-        // Handle fixed constraint boundary condition
-        if (params.kind == "fixed_constraint") {
-            if (id > 0 && id <= maxBdrAttr) {
-                fixedBdr_[id - 1] = 1;
-            }
+    for (const auto& [id, params] : fieldIt->second) {
+        if (params.kind == "fixed_constraint" && id > 0 && id <= maxBdrAttr) {
+            fixedBdr_[id - 1] = 1;
         }
     }
 }
 
-void SolidMechanicsSolver::Impl::parseCouplingTerms()
+void SolidMechanicsSolver::parseCouplingTerms()
 {
     hasThermalExpansion_ = false;
-
     for (const auto& coupling : problemModel_->couplings) {
         if (coupling == CouplingKind::ThermalExpansion) {
             hasThermalExpansion_ = true;
@@ -245,154 +115,97 @@ void SolidMechanicsSolver::Impl::parseCouplingTerms()
     }
 }
 
-SolidMechanicsSolver::SolidMechanicsSolver()
-    : impl_(std::make_unique<Impl>())
-{
-}
-
-SolidMechanicsSolver::~SolidMechanicsSolver() = default;
-
-void SolidMechanicsSolver::setOrder(int order)
-{
-    impl_->order_ = order > 0 ? order : 1;
-}
-
-void SolidMechanicsSolver::setSolver(std::unique_ptr<LinearSolverStrategy> solver)
-{
-    impl_->solver_ = std::move(solver);
-}
-
 void SolidMechanicsSolver::initialize(mfem::Mesh& mesh,
                                       const PhysicsProblemModel& problemModel,
                                       const PhysicsMaterialDatabase& materials)
 {
-    impl_->mesh_ = &mesh;
-    impl_->problemModel_ = &problemModel;
+    mesh_ = &mesh;
+    problemModel_ = &problemModel;
 
-    // Create vector finite element space for displacement
-    impl_->fec_ = std::make_unique<mfem::H1_FECollection>(impl_->order_, mesh.Dimension());
-    impl_->space_ = std::make_unique<mfem::FiniteElementSpace>(
-        &mesh, impl_->fec_.get(), mesh.Dimension());
+    // Create vector finite element space
+    fec_ = std::make_unique<mfem::H1_FECollection>(order_, mesh.Dimension());
+    space_ = std::make_unique<mfem::FiniteElementSpace>(&mesh, fec_.get(), mesh.Dimension());
 
-    // Initialize grid function
-    impl_->displacement_ = std::make_unique<mfem::GridFunction>(impl_->space_.get());
-    *impl_->displacement_ = 0.0;
+    // Initialize solution
+    displacement_ = std::make_unique<mfem::GridFunction>(space_.get());
+    *displacement_ = 0.0;
 
-    // Fill material vectors and compute Lame parameters
-    impl_->fillMaterialVectors(materials);
-    impl_->computeLameParameters();
+    // Material properties
+    fillMaterialVectors(materials);
+    computeLameParameters();
 
-    // Build boundary markers
-    impl_->buildBoundaryMarkers();
+    // Boundary conditions
+    buildBoundaryMarkers();
 
-    // Parse coupling terms
-    impl_->parseCouplingTerms();
+    // Coupling terms
+    parseCouplingTerms();
 
-    // Create thermal expansion load coefficient if needed
-    if (impl_->hasThermalExpansion_) {
-        impl_->thermalExpansionLoad_ = std::make_unique<ThermalExpansionGradLoadCoefficient>(
-            mesh.Dimension());
-        impl_->thermalExpansionLoad_->setAlphaCoefficient(impl_->alpha_.get());
-        impl_->thermalExpansionLoad_->setLambdaCoefficient(impl_->lambda_.get());
-        impl_->thermalExpansionLoad_->setMuCoefficient(impl_->mu_.get());
-        impl_->thermalExpansionLoad_->setReferenceTemperature(impl_->referenceTemperature_);
+    // Cache essential true DOFs
+    space_->GetEssentialTrueDofs(fixedBdr_, essTdof_);
+
+    // Zero displacement for fixed boundaries
+    zeroDisp_.SetSize(mesh.Dimension());
+    zeroDisp_ = 0.0;
+    zeroCoef_ = std::make_unique<mfem::VectorConstantCoefficient>(zeroDisp_);
+
+    // Thermal expansion load coefficient
+    if (hasThermalExpansion_) {
+        thermalExpansionLoad_.emplace(mesh.Dimension());
+        thermalExpansionLoad_->setAlphaCoefficient(&alpha_);
+        thermalExpansionLoad_->setLambdaCoefficient(&lambda_);
+        thermalExpansionLoad_->setMuCoefficient(&mu_);
+        thermalExpansionLoad_->setReferenceTemperature(referenceTemperature_);
     }
-    
-    // Initialize boundary condition coefficients
-    impl_->zeroDisp_.SetSize(mesh.Dimension());
-    impl_->zeroDisp_ = 0.0;
-    impl_->zeroCoef_ = std::make_unique<mfem::VectorConstantCoefficient>(impl_->zeroDisp_);
 }
 
 void SolidMechanicsSolver::applyBoundaryConditions()
 {
-    // Project zero displacement on fixed boundaries
-    impl_->displacement_->ProjectBdrCoefficient(*impl_->zeroCoef_, impl_->fixedBdr_);
+    displacement_->ProjectBdrCoefficient(*zeroCoef_, fixedBdr_);
 }
 
 void SolidMechanicsSolver::assemble()
 {
-    impl_->aForm_ = std::make_unique<mfem::BilinearForm>(impl_->space_.get());
-    impl_->aForm_->AddDomainIntegrator(
-        new mfem::ElasticityIntegrator(*impl_->lambda_, *impl_->mu_));
-    impl_->aForm_->Assemble();
+    // Create fresh forms each iteration
+    aForm_ = std::make_unique<mfem::BilinearForm>(space_.get());
+    aForm_->AddDomainIntegrator(new mfem::ElasticityIntegrator(lambda_, mu_));
+    aForm_->Assemble();
 
-    // Build right-hand side
-    impl_->bForm_ = std::make_unique<mfem::LinearForm>(impl_->space_.get());
-
-    // Add thermal expansion load
-    if (impl_->hasThermalExpansion_ && impl_->thermalExpansionLoad_) {
-        impl_->bForm_->AddDomainIntegrator(
-            new mfem::VectorDomainLFGradIntegrator(*impl_->thermalExpansionLoad_));
+    bForm_ = std::make_unique<mfem::LinearForm>(space_.get());
+    if (hasThermalExpansion_ && thermalExpansionLoad_) {
+        bForm_->AddDomainIntegrator(new mfem::VectorDomainLFGradIntegrator(*thermalExpansionLoad_));
     }
-
-    impl_->bForm_->Assemble();
-
-    // Get essential true DOFs
-    impl_->space_->GetEssentialTrueDofs(impl_->fixedBdr_, impl_->essTdof_);
+    bForm_->Assemble();
 }
 
 void SolidMechanicsSolver::solve()
 {
-    Check(impl_->solver_, "No linear solver set for SolidMechanicsSolver");
+    Check(solver_, "No linear solver set for SolidMechanicsSolver");
+
     mfem::SparseMatrix mat;
     mfem::Vector x, b;
-    impl_->aForm_->FormLinearSystem(impl_->essTdof_,
-                                    *impl_->displacement_,
-                                    *impl_->bForm_,
-                                    mat, x, b);
+    aForm_->FormLinearSystem(essTdof_, *displacement_, *bForm_, mat, x, b);
     x = 0.0;
 
-    impl_->solver_->solve(mat, x, b);
+    solver_->solve(mat, x, b);
 
-    impl_->aForm_->RecoverFEMSolution(x, *impl_->bForm_, *impl_->displacement_);
+    aForm_->RecoverFEMSolution(x, *bForm_, *displacement_);
 }
 
-mfem::GridFunction& SolidMechanicsSolver::getField()
-{
-    return *impl_->displacement_;
-}
-
-const mfem::GridFunction& SolidMechanicsSolver::getField() const
-{
-    return *impl_->displacement_;
-}
-
-FieldKind SolidMechanicsSolver::getFieldKind() const
-{
-    return FieldKind::Displacement;
-}
-
-mfem::FiniteElementSpace& SolidMechanicsSolver::getSpace()
-{
-    return *impl_->space_;
-}
-
-const mfem::FiniteElementSpace& SolidMechanicsSolver::getSpace() const
-{
-    return *impl_->space_;
-}
+mfem::GridFunction& SolidMechanicsSolver::getField() { return *displacement_; }
+const mfem::GridFunction& SolidMechanicsSolver::getField() const { return *displacement_; }
+FieldKind SolidMechanicsSolver::getFieldKind() const { return FieldKind::Displacement; }
+mfem::FiniteElementSpace& SolidMechanicsSolver::getSpace() { return *space_; }
+const mfem::FiniteElementSpace& SolidMechanicsSolver::getSpace() const { return *space_; }
 
 void SolidMechanicsSolver::setTemperatureField(const mfem::GridFunction* temperature)
 {
-    if (impl_->thermalExpansionLoad_) {
-        impl_->thermalExpansionLoad_->setTemperatureField(temperature);
+    if (thermalExpansionLoad_) {
+        thermalExpansionLoad_->setTemperatureField(temperature);
     }
 }
 
-mfem::Coefficient* SolidMechanicsSolver::getLambdaCoefficient()
-{
-    return impl_->lambda_.get();
-}
-
-mfem::Coefficient* SolidMechanicsSolver::getMuCoefficient()
-{
-    return impl_->mu_.get();
-}
-
-mfem::Coefficient* SolidMechanicsSolver::getThermalExpansionCoefficient()
-{
-    return impl_->alpha_.get();
-}
+mfem::Coefficient* SolidMechanicsSolver::getLambdaCoefficient() { return &lambda_; }
+mfem::Coefficient* SolidMechanicsSolver::getMuCoefficient() { return &mu_; }
+mfem::Coefficient* SolidMechanicsSolver::getThermalExpansionCoefficient() { return &alpha_; }
 
 } // namespace mpfem

@@ -2,7 +2,6 @@
 #define MPFEM_PHYSICS_PROBLEM_BUILDER_HPP
 
 #include "case_model.hpp"
-#include "material_model.hpp"
 #include "physics_problem_model.hpp"
 
 namespace mpfem {

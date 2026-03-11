@@ -61,7 +61,7 @@
     <source kind="volumetric_heat_source" domains="1-7" value="joule_heating" />
   </physics>
 
-  <physics kind="solid_mechanics" order="1">
+  <physics kind="solid_mechanics" order="2">
     <solver type="direct" max_iter="1000" tolerance="1e-10" print_level="0"/>
     <!-- Split fixed constraints to test new structure -->
     <boundary kind="fixed_constraint" ids="8" />
