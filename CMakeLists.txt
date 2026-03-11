@@ -29,8 +29,14 @@ endif()
 option(MPFEM_USE_PARDISO "Enable PARDISO solver (requires Intel MKL)" OFF)
 if(MPFEM_USE_PARDISO)
     set(MFEM_USE_MKL_PARDISO ON CACHE BOOL "Enable MKL Pardiso in MFEM" FORCE)
-    set(MKL_LIBRARY_DIR "/usr/lib/x86_64-linux-gnu" CACHE STRING "MKL library path")
     set(MKL_PARDISO_DIR "/usr" CACHE STRING "MKL Pardiso installation prefix")
+    set(MKL_PARDISO_INCLUDE_DIRS "/usr/include;/usr/include/mkl" CACHE STRING "MKL include directories")
+    # Use sequential threading layer (no OpenMP dependency)
+    set(MKL_PARDISO_LIBRARIES
+        "${CMAKE_INSTALL_PREFIX}/lib/x86_64-linux-gnu/libmkl_intel_lp64.so"
+        "${CMAKE_INSTALL_PREFIX}/lib/x86_64-linux-gnu/libmkl_sequential.so"
+        "${CMAKE_INSTALL_PREFIX}/lib/x86_64-linux-gnu/libmkl_core.so"
+        CACHE STRING "MKL PARDISO libraries")
 endif()
 
 # MFEM source (vendor or clone)
