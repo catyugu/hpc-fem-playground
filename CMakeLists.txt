@@ -31,12 +31,13 @@ if(MPFEM_USE_PARDISO)
     set(MFEM_USE_MKL_PARDISO ON CACHE BOOL "Enable MKL Pardiso in MFEM" FORCE)
     set(MKL_PARDISO_DIR "/usr" CACHE STRING "MKL Pardiso installation prefix")
     set(MKL_PARDISO_INCLUDE_DIRS "/usr/include;/usr/include/mkl" CACHE STRING "MKL include directories")
-    # Use sequential threading layer (no OpenMP dependency)
+    # Use GNU OpenMP threading layer (works with libgomp)
     set(MKL_PARDISO_LIBRARIES
-        "${CMAKE_INSTALL_PREFIX}/lib/x86_64-linux-gnu/libmkl_intel_lp64.so"
-        "${CMAKE_INSTALL_PREFIX}/lib/x86_64-linux-gnu/libmkl_sequential.so"
-        "${CMAKE_INSTALL_PREFIX}/lib/x86_64-linux-gnu/libmkl_core.so"
+        "/usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so"
+        "/usr/lib/x86_64-linux-gnu/libmkl_gnu_thread.so"
+        "/usr/lib/x86_64-linux-gnu/libmkl_core.so"
         CACHE STRING "MKL PARDISO libraries")
+    find_package(OpenMP REQUIRED)
 endif()
 
 # MFEM source (vendor or clone)
