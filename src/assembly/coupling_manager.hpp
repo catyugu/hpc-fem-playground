@@ -7,27 +7,26 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <set>
 
 namespace mpfem {
 
 /**
  * @brief Unified coupling manager for multi-physics simulations.
  * 
- * This class manages the coupling between different physics fields,
- * handling data transfer and iteration control. It supports:
- * - Joule heating coupling (electrostatics -> heat transfer)
- * - Thermal expansion coupling (heat transfer -> solid mechanics)
- * - Newton-Raphson and Picard iteration methods
+ * Optimized coupling strategy:
+ * 1. Build dependency graph from CouplingKind definitions
+ * 2. Identify tightly coupled subgraphs (bidirectional dependencies)
+ * 3. Iterate only tightly coupled fields until convergence
+ * 4. Solve downstream fields (unidirectional dependencies) once after convergence
  */
 class CouplingManager {
 public:
-    CouplingManager();
-    ~CouplingManager();
+    CouplingManager() = default;
+    ~CouplingManager() = default;
 
     /**
      * @brief Register a physics field solver.
-     * @param kind The field kind this solver handles.
-     * @param solver Pointer to the solver (ownership not transferred).
      */
     void registerField(FieldKind kind, PhysicsFieldSolver* solver);
 
@@ -37,12 +36,12 @@ public:
     void setCouplingConfig(const CouplingConfig& config);
 
     /**
-     * @brief Setup coupling data transfer between fields.
+     * @brief Register a coupling type between fields.
      */
-    void setupCoupling();
+    void registerCoupling(CouplingKind kind);
 
     /**
-     * @brief Run the coupled iteration loop.
+     * @brief Run the coupled iteration loop with optimized dependency resolution.
      */
     void run();
 
@@ -54,16 +53,45 @@ public:
     /**
      * @brief Get the number of iterations from the last run.
      */
-    int getNumIterations() const;
+    int getNumIterations() const { return numIterations_; }
 
     /**
      * @brief Get the convergence status from the last run.
      */
-    bool isConverged() const;
+    bool isConverged() const { return converged_; }
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    // Field management
+    std::map<FieldKind, PhysicsFieldSolver*> solvers_;
+    CouplingConfig config_;
+    
+    // Iteration state
+    int numIterations_ = 0;
+    bool converged_ = false;
+    std::vector<mfem::Vector> previousSolutions_;
+    
+    // Dependency graph
+    std::set<FieldKind> tightlyCoupledFields_;  // Fields that need iteration
+    std::vector<FieldKind> downstreamFields_;   // Fields solved after convergence
+    std::vector<CouplingKind> couplingKinds_;
+    
+    // Build dependency graph from coupling kinds
+    void buildDependencyGraph();
+    
+    // Solve a single field
+    void solveField(PhysicsFieldSolver* solver, const std::string& name);
+    
+    // Save solutions for convergence check
+    void savePreviousSolutions();
+    
+    // Check convergence for tightly coupled fields only
+    bool checkConvergence();
+    
+    // Run iteration for tightly coupled fields
+    void runTightlyCoupledIteration();
+    
+    // Solve downstream fields after convergence
+    void solveDownstreamFields();
 };
 
 } // namespace mpfem

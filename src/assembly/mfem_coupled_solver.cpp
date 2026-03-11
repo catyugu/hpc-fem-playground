@@ -131,8 +131,10 @@ void MfemCoupledSolver::solve(mfem::Mesh& mesh,
     couplingManager.registerField(FieldKind::Displacement, solidMechanicsSolver.get());
     couplingManager.setCouplingConfig(problemModel.couplingConfig);
 
-    // Setup coupling
-    couplingManager.setupCoupling();
+    // Register coupling types for dependency graph construction
+    for (CouplingKind kind : problemModel.couplings) {
+        couplingManager.registerCoupling(kind);
+    }
 
     // Run coupled simulation
     couplingManager.run();
